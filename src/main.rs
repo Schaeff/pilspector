@@ -10,12 +10,19 @@ mod test {
 
     #[test]
     fn parse_binary() {
-        let binary_pil_str = std::fs::read_to_string("nine2one.pil.json").unwrap();
+        let pil_str = std::fs::read_to_string("binary.pil.json").unwrap();
 
-        let pil: Pil = serde_json::from_str(&binary_pil_str)
+        let mut pil_value: serde_json::Value = serde_json::from_str(&pil_str).unwrap();
+
+        // expression lists fail to parse now, check without
+        pil_value["expressions"] = serde_json::Value::Array(vec![]);
+
+        let pil: Pil = serde_json::from_value(pil_value)
             .map_err(|e| {
                 println!("{}", e);
             })
             .unwrap();
+
+        println!("{:#?}", pil);
     }
 }

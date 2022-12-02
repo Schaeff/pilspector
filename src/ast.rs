@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 
 pub type FieldElement = String;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-// #[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Pil {
     n_commitments: usize,
@@ -12,7 +13,7 @@ pub struct Pil {
     n_im: usize,
     n_constants: usize,
     publics: Vec<Value>,
-    //references: References,
+    references: References,
     expressions: Vec<Expression>,
     pol_identities: Vec<PolIdentity>,
     plookup_identities: Vec<PlookupIdentity>,
@@ -20,10 +21,29 @@ pub struct Pil {
     connection_identities: Vec<ConnectionIdentity>,
 }
 
+pub type ReferenceKey = String;
+pub type References = HashMap<ReferenceKey, ReferenceInner>;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
-// #[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub struct References {}
+pub struct ReferenceInner {
+    _type: ReferenceType,
+    id: usize,
+    pol_deg: Option<usize>,
+    is_array: bool,
+    // should be present only when `is_array` is `true`
+    len: Option<usize>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub enum ReferenceType {
+    ConstP,
+    CmP,
+    ImP,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -78,7 +98,7 @@ pub struct Cm {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-// #[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PolIdentity {
     e: usize,
@@ -87,7 +107,7 @@ pub struct PolIdentity {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-// #[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PlookupIdentity {
     f: Vec<usize>,
@@ -99,7 +119,7 @@ pub struct PlookupIdentity {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-// #[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Location {
     file_name: String,
