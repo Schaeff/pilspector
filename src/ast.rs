@@ -23,13 +23,15 @@ pub struct Pil {
 
 pub type ReferenceKey = String;
 pub type References = HashMap<ReferenceKey, ReferenceInner>;
+// the index of a polynomial
+pub type PolynomialId = usize;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct ReferenceInner {
     _type: ReferenceType,
-    id: usize,
+    id: PolynomialId,
     pol_deg: Option<usize>,
     is_array: bool,
     // should be present only when `is_array` is `true`
@@ -85,7 +87,7 @@ pub struct Number {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Const {
-    id: usize,
+    id: PolynomialId,
     next: bool,
 }
 
@@ -93,7 +95,7 @@ pub struct Const {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Cm {
-    id: usize,
+    id: PolynomialId,
     next: bool,
 }
 
@@ -101,7 +103,7 @@ pub struct Cm {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PolIdentity {
-    e: usize,
+    e: PolynomialId,
     #[serde(flatten)]
     location: Location,
 }
@@ -110,10 +112,32 @@ pub struct PolIdentity {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PlookupIdentity {
-    f: Vec<usize>,
-    t: Vec<usize>,
+    f: Vec<PolynomialId>,
+    t: Vec<PolynomialId>,
     sel_f: Option<Value>,
     sel_t: Option<Value>,
+    #[serde(flatten)]
+    location: Location,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub struct PermutationIdentity {
+    f: Vec<PolynomialId>,
+    t: Vec<PolynomialId>,
+    sel_f: Option<Value>,
+    sel_t: Option<Value>,
+    #[serde(flatten)]
+    location: Location,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionIdentity {
+    pols: Vec<PolynomialId>,
+    connections: Vec<PolynomialId>,
     #[serde(flatten)]
     location: Location,
 }
@@ -125,9 +149,6 @@ pub struct Location {
     file_name: String,
     line: usize,
 }
-
-pub type ConnectionIdentity = ();
-pub type PermutationIdentity = ();
 
 #[cfg(test)]
 mod test {

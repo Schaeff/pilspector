@@ -10,7 +10,7 @@ mod test {
 
     #[test]
     fn parse_binary() {
-        let pil_str = std::fs::read_to_string("binary.pil.json").unwrap();
+        let pil_str = std::fs::read_to_string("main.pil.json").unwrap();
 
         let mut pil_value: serde_json::Value = serde_json::from_str(&pil_str).unwrap();
 
