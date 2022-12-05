@@ -1,4 +1,5 @@
 mod ast;
+mod visitor;
 
 fn main() {
     println!("Hello, world!");
@@ -13,5 +14,19 @@ mod test {
         let pil_str = std::fs::read_to_string("main.pil.json").unwrap();
 
         let _: Pil = serde_json::from_str(&pil_str).unwrap();
+    }
+
+    #[test]
+    fn display_adder() {
+        let pil_str = std::fs::read_to_string("adder.pil.json").unwrap();
+        let pil: Pil = serde_json::from_str(&pil_str).unwrap();
+        println!("{}", pil);
+    }
+
+    #[test]
+    fn display_main() {
+        let pil_str = std::fs::read_to_string("main.pil.json").unwrap();
+        let pil: Pil = serde_json::from_str(&pil_str).unwrap();
+        println!("{}", pil);
     }
 }
