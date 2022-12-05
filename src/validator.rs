@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Pil, Reference},
+    ast::{ExpressionId, Pil, PublicCell, Reference},
     visitor::*,
 };
 
@@ -7,11 +7,18 @@ use crate::{
 pub struct Validator {
     constant_count: usize,
     commited_count: usize,
-    complex_count: usize,
+    intermediate_count: usize,
 }
 
 impl Visitor for Validator {
     type Error = String;
+
+    fn visit_expression_id(&mut self, id: &ExpressionId, ctx: &Pil) -> Result<Self::Error> {
+        if id.0 >= ctx.expressions.len() {
+            return Err("Expression index out of bounds".into());
+        }
+        visit_expression_id(self, id, ctx)
+    }
 
     fn visit_pil(&mut self, p: &Pil) -> Result<Self::Error> {
         visit_pil(self, p)?;
@@ -19,6 +26,12 @@ impl Visitor for Validator {
             return Err(format!(
                 "Number of commitments doesn't match metadata: expected {} but found {}",
                 p.n_commitments, self.commited_count
+            ));
+        }
+        if self.intermediate_count != p.n_im {
+            return Err(format!(
+                "Number of intermediates doesn't match metadata: expected {} but found {}",
+                p.n_im, self.intermediate_count
             ));
         }
         if self.constant_count != p.n_constants {
@@ -30,16 +43,26 @@ impl Visitor for Validator {
         Ok(())
     }
 
+    fn visit_public_cell(&mut self, cell: &PublicCell, _: &Pil) -> Result<Self::Error> {
+        if cell.pol_type != "cmP" {
+            return Err(format!(
+                "Expected the public cell to reference a committed polynomial, found {}",
+                cell.pol_type
+            ));
+        }
+        Ok(())
+    }
+
     fn visit_reference(&mut self, r: &Reference, _: &Pil) -> Result<Self::Error> {
         match r {
-            Reference::ConstP(_) => {
-                self.constant_count += 1;
+            Reference::ConstP(r) => {
+                self.constant_count += r.len.unwrap_or(1);
             }
-            Reference::CmP(_) => {
-                self.commited_count += 1;
+            Reference::CmP(r) => {
+                self.commited_count += r.len.unwrap_or(1);
             }
-            Reference::ImP(_) => {
-                self.complex_count += 1;
+            Reference::ImP(r) => {
+                self.intermediate_count += r.len.unwrap_or(1);
             }
         };
 

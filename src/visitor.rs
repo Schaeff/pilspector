@@ -96,7 +96,7 @@ pub trait Visitor: Sized {
     }
 
     fn visit_expression_id(&mut self, id: &ExpressionId, ctx: &Pil) -> Result<Self::Error> {
-        self.visit_expression(&ctx.expressions[id.0], ctx)
+        visit_expression_id(self, id, ctx)
     }
 
     fn visit_expression_wrapper<E: Expr + Visit>(
@@ -380,6 +380,14 @@ pub fn visit_const<V: Visitor>(v: &mut V, cm: &Const, ctx: &Pil) -> Result<V::Er
     v.visit_reference_key(reference_key, ctx)?;
     v.visit_reference_inner(reference_inner, ctx)?;
     v.visit_next(&cm.next, ctx)
+}
+
+pub fn visit_expression_id<V: Visitor>(
+    v: &mut V,
+    id: &ExpressionId,
+    ctx: &Pil,
+) -> Result<V::Error> {
+    v.visit_expression(&ctx.expressions[id.0], ctx)
 }
 
 pub fn visit_number<V: Visitor>(_v: &mut V, _c: &Number, _ctx: &Pil) -> Result<V::Error> {

@@ -3,10 +3,6 @@ mod displayer;
 mod validator;
 mod visitor;
 
-fn main() {
-    println!("Hello, world!");
-}
-
 #[cfg(test)]
 mod test {
     use crate::ast::Pil;

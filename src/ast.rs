@@ -143,22 +143,13 @@ pub struct ConstantReference {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicCell {
-    // this must be "cmP"
+    // this must be "cmP", checked in the validator
     pub pol_type: String,
     pub pol_id: CommittedPolynomialId,
     pub idx: RowId,
     // this seems to be the id of this cell in the list of public cells, seems redundant
     pub id: usize,
     pub name: PublicCellKey,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-pub enum ReferenceType {
-    ConstP,
-    CmP,
-    ImP,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
