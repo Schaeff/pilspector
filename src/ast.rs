@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
 
-use crate::visitor::{Result, Visitor};
+use crate::{visitor::{Result, Visitor}, validator::Validator};
 
 pub type FieldElement = String;
 
@@ -21,6 +21,12 @@ pub struct Pil {
     pub plookup_identities: Vec<PlookupIdentity>,
     pub permutation_identities: Vec<PermutationIdentity>,
     pub connection_identities: Vec<ConnectionIdentity>,
+}
+
+impl Pil {
+    pub fn validate(&self) -> Result<String> {
+        Validator::default().visit_pil(self)
+    }
 }
 
 struct PilDisplayer<'a, 'b> {

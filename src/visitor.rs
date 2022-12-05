@@ -130,9 +130,13 @@ pub trait Visitor: Sized {
     fn visit_reference_inner(&mut self, inner: &ReferenceInner, ctx: &Pil) -> Result<Self::Error> {
         visit_reference_inner(self, inner, ctx)
     }
+
+    fn visit_reference_type(&mut self, t: &ReferenceType, ctx: &Pil) -> Result<Self::Error> {
+        visit_reference_type(self, t, ctx)
+    }
 }
 
-fn visit_pil<V: Visitor>(v: &mut V, p: &Pil) -> Result<V::Error> {
+pub fn visit_pil<V: Visitor>(v: &mut V, p: &Pil) -> Result<V::Error> {
     let ctx = p;
 
     for (key, inner) in p.references.iter() {
@@ -147,7 +151,7 @@ fn visit_pil<V: Visitor>(v: &mut V, p: &Pil) -> Result<V::Error> {
     Ok(())
 }
 
-fn visit_polynomial_identity<V: Visitor>(
+pub fn visit_polynomial_identity<V: Visitor>(
     v: &mut V,
     i: &PolIdentity,
     ctx: &Pil,
@@ -155,7 +159,7 @@ fn visit_polynomial_identity<V: Visitor>(
     v.visit_expression(&ctx.expressions[i.e.0], ctx)
 }
 
-fn visit_expression<V: Visitor>(v: &mut V, e: &Expression, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_expression<V: Visitor>(v: &mut V, e: &Expression, ctx: &Pil) -> Result<V::Error> {
     match e {
         Expression::Public(w) => {
             v.visit_expression_wrapper(w, ctx)?;
@@ -189,7 +193,7 @@ fn visit_expression<V: Visitor>(v: &mut V, e: &Expression, ctx: &Pil) -> Result<
     Ok(())
 }
 
-fn visit_expression_wrapper<V: Visitor, E: Expr + Visit>(
+pub fn visit_expression_wrapper<V: Visitor, E: Expr + Visit>(
     v: &mut V,
     e: &ExpressionWrapper<E>,
     ctx: &Pil,
@@ -197,43 +201,43 @@ fn visit_expression_wrapper<V: Visitor, E: Expr + Visit>(
     e.inner.visit(v, ctx)
 }
 
-fn visit_add<V: Visitor>(v: &mut V, values: &Add, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_add<V: Visitor>(v: &mut V, values: &Add, ctx: &Pil) -> Result<V::Error> {
     for value in values.values.iter() {
         v.visit_expression(value, ctx)?;
     }
     Ok(())
 }
 
-fn visit_sub<V: Visitor>(v: &mut V, sub: &Sub, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_sub<V: Visitor>(v: &mut V, sub: &Sub, ctx: &Pil) -> Result<V::Error> {
     for value in sub.values.iter() {
         v.visit_expression(value, ctx)?;
     }
     Ok(())
 }
 
-fn visit_mul<V: Visitor>(v: &mut V, mul: &Mul, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_mul<V: Visitor>(v: &mut V, mul: &Mul, ctx: &Pil) -> Result<V::Error> {
     for value in mul.values.iter() {
         v.visit_expression(value, ctx)?;
     }
     Ok(())
 }
 
-fn visit_exp<V: Visitor>(v: &mut V, exp: &Exp, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_exp<V: Visitor>(v: &mut V, exp: &Exp, ctx: &Pil) -> Result<V::Error> {
     v.visit_expression(&ctx.expressions[exp.id.0], ctx)
 }
 
-fn visit_public<V: Visitor>(v: &mut V, public: &Public, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_public<V: Visitor>(v: &mut V, public: &Public, ctx: &Pil) -> Result<V::Error> {
     v.visit_expression(&ctx.expressions[public.id.0], ctx)
 }
 
-fn visit_neg<V: Visitor>(v: &mut V, values: &Neg, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_neg<V: Visitor>(v: &mut V, values: &Neg, ctx: &Pil) -> Result<V::Error> {
     for value in values.values.iter() {
         v.visit_expression(value, ctx)?;
     }
     Ok(())
 }
 
-fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
     let (reference_key, reference_inner) = &ctx
         .references
         .iter()
@@ -245,7 +249,7 @@ fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
     v.visit_next(&cm.next, ctx)
 }
 
-fn visit_const<V: Visitor>(v: &mut V, cm: &Const, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_const<V: Visitor>(v: &mut V, cm: &Const, ctx: &Pil) -> Result<V::Error> {
     let (reference_key, reference_inner) = &ctx
         .references
         .iter()
@@ -257,22 +261,31 @@ fn visit_const<V: Visitor>(v: &mut V, cm: &Const, ctx: &Pil) -> Result<V::Error>
     v.visit_next(&cm.next, ctx)
 }
 
-fn visit_number<V: Visitor>(_v: &mut V, _c: &Number, _ctx: &Pil) -> Result<V::Error> {
+pub fn visit_number<V: Visitor>(_v: &mut V, _c: &Number, _ctx: &Pil) -> Result<V::Error> {
     Ok(())
 }
 
-fn visit_next<V: Visitor>(_v: &mut V, _c: &bool, _ctx: &Pil) -> Result<V::Error> {
+pub fn visit_next<V: Visitor>(_v: &mut V, _c: &bool, _ctx: &Pil) -> Result<V::Error> {
     Ok(())
 }
 
-fn visit_reference_key<V: Visitor>(_v: &mut V, _c: &ReferenceKey, _ctx: &Pil) -> Result<V::Error> {
+pub fn visit_reference_key<V: Visitor>(_v: &mut V, _c: &ReferenceKey, _ctx: &Pil) -> Result<V::Error> {
     Ok(())
 }
 
-fn visit_reference_inner<V: Visitor>(
-    _v: &mut V,
-    _c: &ReferenceInner,
-    _ctx: &Pil,
+pub fn visit_reference_inner<V: Visitor>(
+    v: &mut V,
+    c: &ReferenceInner,
+    ctx: &Pil,
+) -> Result<V::Error> {
+    v.visit_reference_type(&c._type, ctx)?;
+    Ok(())
+}
+
+pub fn visit_reference_type<V: Visitor>(
+    v: &mut V,
+    c: &ReferenceType,
+    ctx: &Pil,
 ) -> Result<V::Error> {
     Ok(())
 }
