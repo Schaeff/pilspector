@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
 
-use crate::{visitor::{Result, Visitor}, validator::Validator};
+use crate::{
+    validator::Validator,
+    visitor::{Result, Visitor},
+};
 
 pub type FieldElement = String;
 
@@ -39,16 +42,10 @@ impl<'a, 'b> Visitor for PilDisplayer<'a, 'b> {
     fn visit_pil(&mut self, p: &Pil) -> Result<Self::Error> {
         let ctx = p;
 
-        for (key, inner) in p.references.iter() {
+        for (key, r) in p.references.iter() {
             write!(self.f, "pol")?;
 
             write!(self.f, " ")?;
-
-            match inner._type {
-                ReferenceType::ConstP => write!(self.f, "constant ")?,
-                ReferenceType::CmP => write!(self.f, "commit ")?,
-                ReferenceType::ImP => write!(self.f, "")?,
-            };
 
             write!(self.f, "{}", key)?;
             writeln!(self.f)?;
@@ -114,13 +111,16 @@ impl fmt::Display for Pil {
 }
 
 pub type ReferenceKey = String;
-pub type References = BTreeMap<ReferenceKey, ReferenceInner>;
+pub type References = BTreeMap<ReferenceKey, Reference>;
 // the index of the expression in the expression list
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ExpressionId(pub usize);
-// the index of the polynomial
+// the index of a committed polynomial
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct PolynomialId(pub usize);
+pub struct CommittedPolynomialId(pub usize);
+// the index of a constant polynomial
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ConstantPolynomialId(pub usize);
 // the index of a public value in the public list
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PublicId(pub usize);
@@ -134,7 +134,13 @@ impl From<usize> for ExpressionId {
     }
 }
 
-impl From<usize> for PolynomialId {
+impl From<usize> for ConstantPolynomialId {
+    fn from(n: usize) -> Self {
+        Self(n)
+    }
+}
+
+impl From<usize> for CommittedPolynomialId {
     fn from(n: usize) -> Self {
         Self(n)
     }
@@ -155,9 +161,40 @@ impl From<usize> for RowId {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub struct ReferenceInner {
-    pub _type: ReferenceType,
-    pub id: PolynomialId,
+#[serde(tag = "type")]
+pub enum Reference {
+    CmP(ReferenceInner<CommittedPolynomialId>),
+    ConstP(ReferenceInner<ConstantPolynomialId>),
+    ImP(ReferenceInner<ExpressionId>),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceInner<Id> {
+    pub id: Id,
+    pub pol_deg: Option<usize>,
+    pub is_array: bool,
+    // should be present only when `is_array` is `true`
+    pub len: Option<usize>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub struct ComplexReference {
+    pub id: CommittedPolynomialId,
+    pub pol_deg: Option<usize>,
+    pub is_array: bool,
+    // should be present only when `is_array` is `true`
+    pub len: Option<usize>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub struct ConstantReference {
+    pub id: ConstantPolynomialId,
     pub pol_deg: Option<usize>,
     pub is_array: bool,
     // should be present only when `is_array` is `true`
@@ -169,7 +206,7 @@ pub struct ReferenceInner {
 #[serde(rename_all = "camelCase")]
 pub struct PublicCell {
     pol_type: ReferenceType,
-    pol_id: ExpressionId,
+    pol_id: CommittedPolynomialId,
     idx: RowId,
     id: usize,
     name: String,
@@ -280,7 +317,7 @@ pub struct Number {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Const {
-    pub id: PolynomialId,
+    pub id: ConstantPolynomialId,
     pub next: bool,
 }
 
@@ -296,7 +333,7 @@ pub struct Exp {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Cm {
-    pub id: PolynomialId,
+    pub id: CommittedPolynomialId,
     pub next: bool,
 }
 

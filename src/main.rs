@@ -1,6 +1,6 @@
 mod ast;
-mod visitor;
 mod validator;
+mod visitor;
 
 fn main() {
     println!("Hello, world!");
@@ -14,7 +14,7 @@ mod test {
     fn parse_main() {
         let pil_str = std::fs::read_to_string("main.pil.json").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
-        assert!(pil.validate().is_ok());
+        pil.validate().unwrap();
     }
 
     #[test]

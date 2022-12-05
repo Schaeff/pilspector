@@ -127,21 +127,25 @@ pub trait Visitor: Sized {
         visit_reference_key(self, c, ctx)
     }
 
-    fn visit_reference_inner(&mut self, inner: &ReferenceInner, ctx: &Pil) -> Result<Self::Error> {
-        visit_reference_inner(self, inner, ctx)
+    fn visit_reference(&mut self, r: &Reference, ctx: &Pil) -> Result<Self::Error> {
+        visit_reference(self, r, ctx)
     }
 
-    fn visit_reference_type(&mut self, t: &ReferenceType, ctx: &Pil) -> Result<Self::Error> {
-        visit_reference_type(self, t, ctx)
+    fn visit_reference_inner<Id>(
+        &mut self,
+        inner: &ReferenceInner<Id>,
+        ctx: &Pil,
+    ) -> Result<Self::Error> {
+        visit_reference_inner(self, inner, ctx)
     }
 }
 
 pub fn visit_pil<V: Visitor>(v: &mut V, p: &Pil) -> Result<V::Error> {
     let ctx = p;
 
-    for (key, inner) in p.references.iter() {
+    for (key, r) in p.references.iter() {
         v.visit_reference_key(key, ctx)?;
-        v.visit_reference_inner(inner, ctx)?;
+        v.visit_reference(r, ctx)?;
     }
 
     for i in &p.pol_identities {
@@ -241,7 +245,13 @@ pub fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
     let (reference_key, reference_inner) = &ctx
         .references
         .iter()
-        .find(|(_, r)| r._type == ReferenceType::CmP && r.id == cm.id)
+        .filter_map(|(key, r)| match r {
+            Reference::CmP(r) => {
+                (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0)).then(|| (key, r))
+            }
+            _ => None,
+        })
+        .next()
         .unwrap();
 
     v.visit_reference_key(reference_key, ctx)?;
@@ -253,7 +263,13 @@ pub fn visit_const<V: Visitor>(v: &mut V, cm: &Const, ctx: &Pil) -> Result<V::Er
     let (reference_key, reference_inner) = &ctx
         .references
         .iter()
-        .find(|(_, r)| r._type == ReferenceType::ConstP && r.id == cm.id)
+        .filter_map(|(key, r)| match r {
+            Reference::ConstP(r) => {
+                (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0)).then(|| (key, r))
+            }
+            _ => None,
+        })
+        .next()
         .unwrap();
 
     v.visit_reference_key(reference_key, ctx)?;
@@ -269,22 +285,33 @@ pub fn visit_next<V: Visitor>(_v: &mut V, _c: &bool, _ctx: &Pil) -> Result<V::Er
     Ok(())
 }
 
-pub fn visit_reference_key<V: Visitor>(_v: &mut V, _c: &ReferenceKey, _ctx: &Pil) -> Result<V::Error> {
-    Ok(())
-}
-
-pub fn visit_reference_inner<V: Visitor>(
-    v: &mut V,
-    c: &ReferenceInner,
-    ctx: &Pil,
+pub fn visit_reference_key<V: Visitor>(
+    _v: &mut V,
+    _c: &ReferenceKey,
+    _ctx: &Pil,
 ) -> Result<V::Error> {
-    v.visit_reference_type(&c._type, ctx)?;
     Ok(())
 }
 
-pub fn visit_reference_type<V: Visitor>(
+pub fn visit_reference<V: Visitor>(v: &mut V, r: &Reference, ctx: &Pil) -> Result<V::Error> {
+    match r {
+        Reference::CmP(i) => {
+            v.visit_reference_inner(i, ctx)?;
+        }
+        Reference::ConstP(i) => {
+            v.visit_reference_inner(i, ctx)?;
+        }
+        Reference::ImP(i) => {
+            todo!()
+        }
+    };
+
+    Ok(())
+}
+
+pub fn visit_reference_inner<V: Visitor, Id>(
     v: &mut V,
-    c: &ReferenceType,
+    i: &ReferenceInner<Id>,
     ctx: &Pil,
 ) -> Result<V::Error> {
     Ok(())

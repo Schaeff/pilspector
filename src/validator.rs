@@ -1,4 +1,7 @@
-use crate::{visitor::*, ast::{Pil, ReferenceType}};
+use crate::{
+    ast::{Pil, Reference},
+    visitor::*,
+};
 
 #[derive(Default)]
 pub struct Validator {
@@ -21,18 +24,19 @@ impl Visitor for Validator {
         Ok(())
     }
 
-    fn visit_reference_type(&mut self, t: &ReferenceType, _: &Pil) -> Result<Self::Error> {
-        match t {
-            ReferenceType::ConstP => {
+    fn visit_reference(&mut self, r: &Reference, _: &Pil) -> Result<Self::Error> {
+        match r {
+            Reference::ConstP(_) => {
                 self.constant_count += 1;
-            },
-            ReferenceType::CmP => {
+            }
+            Reference::CmP(_) => {
                 self.commited_count += 1;
-            },
-            ReferenceType::ImP => {
+            }
+            Reference::ImP(_) => {
                 self.complex_count += 1;
-            },
-        }
+            }
+        };
+
         Ok(())
     }
 }
