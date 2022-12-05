@@ -16,10 +16,16 @@ impl Visitor for Validator {
     fn visit_pil(&mut self, p: &Pil) -> Result<Self::Error> {
         visit_pil(self, p)?;
         if self.commited_count != p.n_commitments {
-            return Err(format!("Number of commitments doesn't match metadata"));
+            return Err(format!(
+                "Number of commitments doesn't match metadata: expected {} but found {}",
+                p.n_commitments, self.commited_count
+            ));
         }
         if self.constant_count != p.n_constants {
-            return Err(format!("Number of constants doesn't match metadata"));
+            return Err(format!(
+                "Number of constants doesn't match metadata: expected {} but found {}",
+                p.n_constants, self.constant_count
+            ));
         }
         Ok(())
     }

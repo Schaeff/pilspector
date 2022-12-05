@@ -1,0 +1,236 @@
+{
+ "nCommitments": 3,
+ "nQ": 2,
+ "nIm": 2,
+ "nConstants": 1,
+ "publics": [],
+ "references": {
+  "Multiplier.SET": {
+   "type": "constP",
+   "id": 0,
+   "polDeg": null,
+   "isArray": false
+  },
+  "Multiplier.freeIn": {
+   "type": "cmP",
+   "id": 0,
+   "polDeg": null,
+   "isArray": false
+  },
+  "Multiplier.out": {
+   "type": "cmP",
+   "id": 1,
+   "polDeg": null,
+   "isArray": false
+  },
+  "Multiplier.out2": {
+   "type": "cmP",
+   "id": 2,
+   "polDeg": null,
+   "isArray": false
+  },
+  "Multiplier.mul": {
+   "type": "imP",
+   "id": 0,
+   "polDeg": null,
+   "isArray": false
+  },
+  "Multiplier.mul2": {
+   "type": "imP",
+   "id": 2,
+   "polDeg": null,
+   "isArray": false
+  }
+ },
+ "expressions": [
+  {
+   "op": "mul",
+   "deg": 1,
+   "idQ": 0,
+   "values": [
+    {
+     "op": "cm",
+     "deg": 1,
+     "id": 1,
+     "next": false
+    },
+    {
+     "op": "cm",
+     "deg": 1,
+     "id": 0,
+     "next": false
+    }
+   ]
+  },
+  {
+   "op": "sub",
+   "deg": 2,
+   "values": [
+    {
+     "op": "cm",
+     "deg": 1,
+     "id": 1,
+     "next": true
+    },
+    {
+     "op": "add",
+     "deg": 2,
+     "values": [
+      {
+       "op": "mul",
+       "deg": 2,
+       "values": [
+        {
+         "op": "const",
+         "deg": 1,
+         "id": 0,
+         "next": false
+        },
+        {
+         "op": "cm",
+         "deg": 1,
+         "id": 0,
+         "next": false
+        }
+       ]
+      },
+      {
+       "op": "mul",
+       "deg": 2,
+       "values": [
+        {
+         "op": "sub",
+         "deg": 1,
+         "values": [
+          {
+           "op": "number",
+           "deg": 0,
+           "value": "1"
+          },
+          {
+           "op": "const",
+           "deg": 1,
+           "id": 0,
+           "next": false
+          }
+         ]
+        },
+        {
+         "op": "exp",
+         "deg": 1,
+         "id": 0,
+         "next": false
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "deps": [
+    0
+   ]
+  },
+  {
+   "op": "mul",
+   "deg": 1,
+   "idQ": 1,
+   "values": [
+    {
+     "op": "cm",
+     "deg": 1,
+     "id": 2,
+     "next": false
+    },
+    {
+     "op": "cm",
+     "deg": 1,
+     "id": 0,
+     "next": false
+    }
+   ]
+  },
+  {
+   "op": "sub",
+   "deg": 2,
+   "values": [
+    {
+     "op": "cm",
+     "deg": 1,
+     "id": 2,
+     "next": true
+    },
+    {
+     "op": "add",
+     "deg": 2,
+     "values": [
+      {
+       "op": "mul",
+       "deg": 2,
+       "values": [
+        {
+         "op": "const",
+         "deg": 1,
+         "id": 0,
+         "next": false
+        },
+        {
+         "op": "cm",
+         "deg": 1,
+         "id": 0,
+         "next": false
+        }
+       ]
+      },
+      {
+       "op": "mul",
+       "deg": 2,
+       "values": [
+        {
+         "op": "sub",
+         "deg": 1,
+         "values": [
+          {
+           "op": "number",
+           "deg": 0,
+           "value": "1"
+          },
+          {
+           "op": "const",
+           "deg": 1,
+           "id": 0,
+           "next": false
+          }
+         ]
+        },
+        {
+         "op": "exp",
+         "deg": 1,
+         "id": 2,
+         "next": false
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "deps": [
+    2
+   ]
+  }
+ ],
+ "polIdentities": [
+  {
+   "e": 1,
+   "fileName": "multiplier.pil",
+   "line": 9
+  },
+  {
+   "e": 3,
+   "fileName": "multiplier.pil",
+   "line": 13
+  }
+ ],
+ "plookupIdentities": [],
+ "permutationIdentities": [],
+ "connectionIdentities": []
+}

@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::fmt;
+use std::{collections::BTreeMap};
 
 use crate::{
+    displayer::PilDisplayer,
     validator::Validator,
     visitor::{Result, Visitor},
 };
@@ -17,90 +18,26 @@ pub struct Pil {
     pub n_q: usize,
     pub n_im: usize,
     pub n_constants: usize,
+    // the cells `(polynomial, row)` which are exposed to the verifier
     pub publics: Vec<PublicCell>,
+    // all polynomials in a map
     pub references: References,
+    // all expressions in a list
     pub expressions: Vec<Expression>,
+    // all expressions which must equal 0 (`==` operator)
     pub pol_identities: Vec<PolIdentity>,
+    // all lookups which must succeed (`in` operator)
     pub plookup_identities: Vec<PlookupIdentity>,
+    // all permutations which must hold (`is` operator)
     pub permutation_identities: Vec<PermutationIdentity>,
+    // all connections which must hold (`connect` operator)
     pub connection_identities: Vec<ConnectionIdentity>,
 }
 
 impl Pil {
+    #[allow(unused)]
     pub fn validate(&self) -> Result<String> {
         Validator::default().visit_pil(self)
-    }
-}
-
-struct PilDisplayer<'a, 'b> {
-    f: &'a mut fmt::Formatter<'b>,
-}
-
-impl<'a, 'b> Visitor for PilDisplayer<'a, 'b> {
-    type Error = fmt::Error;
-
-    fn visit_pil(&mut self, p: &Pil) -> Result<Self::Error> {
-        let ctx = p;
-
-        for (key, r) in p.references.iter() {
-            write!(self.f, "pol")?;
-
-            write!(self.f, " ")?;
-
-            write!(self.f, "{}", key)?;
-            writeln!(self.f)?;
-        }
-
-        for i in &p.pol_identities {
-            self.visit_polynomial_identity(i, ctx)?;
-            writeln!(self.f)?;
-        }
-
-        Ok(())
-    }
-
-    fn visit_polynomial_identity(&mut self, i: &PolIdentity, ctx: &Pil) -> Result<Self::Error> {
-        self.visit_expression(&ctx.expressions[i.e.0], ctx)?;
-        write!(self.f, " == 0")
-    }
-
-    fn visit_reference_key(&mut self, c: &ReferenceKey, _ctx: &Pil) -> Result<Self::Error> {
-        write!(self.f, "{}", c)
-    }
-
-    fn visit_add(&mut self, add: &Add, ctx: &Pil) -> Result<Self::Error> {
-        write!(self.f, "(")?;
-        self.visit_expression(&add.values[0], ctx)?;
-        write!(self.f, " + ")?;
-        self.visit_expression(&add.values[1], ctx)?;
-        write!(self.f, ")")
-    }
-
-    fn visit_sub(&mut self, sub: &Sub, ctx: &Pil) -> Result<Self::Error> {
-        write!(self.f, "(")?;
-        self.visit_expression(&sub.values[0], ctx)?;
-        write!(self.f, " - ")?;
-        self.visit_expression(&sub.values[1], ctx)?;
-        write!(self.f, ")")
-    }
-
-    fn visit_mul(&mut self, mul: &Mul, ctx: &Pil) -> Result<Self::Error> {
-        write!(self.f, "(")?;
-        self.visit_expression(&mul.values[0], ctx)?;
-        write!(self.f, " * ")?;
-        self.visit_expression(&mul.values[1], ctx)?;
-        write!(self.f, ")")
-    }
-
-    fn visit_number(&mut self, c: &Number, _ctx: &Pil) -> Result<Self::Error> {
-        write!(self.f, "{}", c.value)
-    }
-
-    fn visit_next(&mut self, next: &bool, _ctx: &Pil) -> Result<Self::Error> {
-        if *next {
-            write!(self.f, "'")?;
-        }
-        Ok(())
     }
 }
 
@@ -110,22 +47,23 @@ impl fmt::Display for Pil {
     }
 }
 
+pub type PublicCellKey = String;
 pub type ReferenceKey = String;
 pub type References = BTreeMap<ReferenceKey, Reference>;
 // the index of the expression in the expression list
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
 pub struct ExpressionId(pub usize);
 // the index of a committed polynomial
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
 pub struct CommittedPolynomialId(pub usize);
 // the index of a constant polynomial
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
 pub struct ConstantPolynomialId(pub usize);
 // the index of a public value in the public list
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
 pub struct PublicId(pub usize);
 // the index of a row
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
 pub struct RowId(pub usize);
 
 impl From<usize> for ExpressionId {
@@ -205,11 +143,13 @@ pub struct ConstantReference {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicCell {
-    pol_type: ReferenceType,
-    pol_id: CommittedPolynomialId,
-    idx: RowId,
-    id: usize,
-    name: String,
+    // this must be "cmP"
+    pub pol_type: String,
+    pub pol_id: CommittedPolynomialId,
+    pub idx: RowId,
+    // this seems to be the id of this cell in the list of public cells, seems redundant
+    pub id: usize,
+    pub name: PublicCellKey,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

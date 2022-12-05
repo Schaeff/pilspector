@@ -138,6 +138,10 @@ pub trait Visitor: Sized {
     ) -> Result<Self::Error> {
         visit_reference_inner(self, inner, ctx)
     }
+
+    fn visit_public_cell(&mut self, cell: &PublicCell, ctx: &Pil) -> Result<Self::Error> {
+        visit_public_cell(self, cell, ctx)
+    }
 }
 
 pub fn visit_pil<V: Visitor>(v: &mut V, p: &Pil) -> Result<V::Error> {
@@ -231,7 +235,7 @@ pub fn visit_exp<V: Visitor>(v: &mut V, exp: &Exp, ctx: &Pil) -> Result<V::Error
 }
 
 pub fn visit_public<V: Visitor>(v: &mut V, public: &Public, ctx: &Pil) -> Result<V::Error> {
-    v.visit_expression(&ctx.expressions[public.id.0], ctx)
+    v.visit_public_cell(&ctx.publics[public.id.0], ctx)
 }
 
 pub fn visit_neg<V: Visitor>(v: &mut V, values: &Neg, ctx: &Pil) -> Result<V::Error> {
@@ -247,7 +251,7 @@ pub fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
         .iter()
         .filter_map(|(key, r)| match r {
             Reference::CmP(r) => {
-                (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0)).then(|| (key, r))
+                (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0)).then_some((key, r))
             }
             _ => None,
         })
@@ -265,7 +269,7 @@ pub fn visit_const<V: Visitor>(v: &mut V, cm: &Const, ctx: &Pil) -> Result<V::Er
         .iter()
         .filter_map(|(key, r)| match r {
             Reference::ConstP(r) => {
-                (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0)).then(|| (key, r))
+                (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0)).then_some((key, r))
             }
             _ => None,
         })
@@ -302,7 +306,7 @@ pub fn visit_reference<V: Visitor>(v: &mut V, r: &Reference, ctx: &Pil) -> Resul
             v.visit_reference_inner(i, ctx)?;
         }
         Reference::ImP(i) => {
-            todo!()
+            v.visit_reference_inner(i, ctx)?;
         }
     };
 
@@ -310,9 +314,19 @@ pub fn visit_reference<V: Visitor>(v: &mut V, r: &Reference, ctx: &Pil) -> Resul
 }
 
 pub fn visit_reference_inner<V: Visitor, Id>(
-    v: &mut V,
-    i: &ReferenceInner<Id>,
-    ctx: &Pil,
+    _v: &mut V,
+    _i: &ReferenceInner<Id>,
+    _ctx: &Pil,
 ) -> Result<V::Error> {
     Ok(())
+}
+
+pub fn visit_public_cell<V: Visitor>(v: &mut V, cell: &PublicCell, ctx: &Pil) -> Result<V::Error> {
+    v.visit_cm(
+        &Cm {
+            id: cell.pol_id,
+            next: false,
+        },
+        ctx,
+    )
 }
