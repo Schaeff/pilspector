@@ -71,8 +71,32 @@ pub trait Visitor: Sized {
         visit_polynomial_identity(self, i, ctx)
     }
 
+    fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil) -> Result<Self::Error> {
+        visit_plookup_identity(self, i, ctx)
+    }
+
+    fn visit_permutation_identity(
+        &mut self,
+        i: &PermutationIdentity,
+        ctx: &Pil,
+    ) -> Result<Self::Error> {
+        visit_permutation_identity(self, i, ctx)
+    }
+
+    fn visit_connection_identity(
+        &mut self,
+        i: &ConnectionIdentity,
+        ctx: &Pil,
+    ) -> Result<Self::Error> {
+        visit_connection_identity(self, i, ctx)
+    }
+
     fn visit_expression(&mut self, e: &Expression, ctx: &Pil) -> Result<Self::Error> {
         visit_expression(self, e, ctx)
+    }
+
+    fn visit_expression_id(&mut self, id: &ExpressionId, ctx: &Pil) -> Result<Self::Error> {
+        self.visit_expression(&ctx.expressions[id.0], ctx)
     }
 
     fn visit_expression_wrapper<E: Expr + Visit>(
@@ -147,13 +171,29 @@ pub trait Visitor: Sized {
 pub fn visit_pil<V: Visitor>(v: &mut V, p: &Pil) -> Result<V::Error> {
     let ctx = p;
 
-    for (key, r) in p.references.iter() {
+    for public_cell in &p.publics {
+        v.visit_public_cell(public_cell, ctx)?;
+    }
+
+    for (key, r) in &p.references {
         v.visit_reference_key(key, ctx)?;
         v.visit_reference(r, ctx)?;
     }
 
     for i in &p.pol_identities {
         v.visit_polynomial_identity(i, ctx)?;
+    }
+
+    for i in &p.plookup_identities {
+        v.visit_plookup_identity(i, ctx)?;
+    }
+
+    for i in &p.permutation_identities {
+        v.visit_permutation_identity(i, ctx)?;
+    }
+
+    for i in &p.connection_identities {
+        v.visit_connection_identity(i, ctx)?;
     }
 
     Ok(())
@@ -165,6 +205,68 @@ pub fn visit_polynomial_identity<V: Visitor>(
     ctx: &Pil,
 ) -> Result<V::Error> {
     v.visit_expression(&ctx.expressions[i.e.0], ctx)
+}
+
+pub fn visit_plookup_identity<V: Visitor>(
+    v: &mut V,
+    i: &PlookupIdentity,
+    ctx: &Pil,
+) -> Result<V::Error> {
+    if let Some(ref id) = i.sel_f {
+        v.visit_expression_id(id, ctx)?;
+    }
+
+    for id in &i.f {
+        v.visit_expression_id(id, ctx)?;
+    }
+
+    if let Some(ref id) = i.sel_t {
+        v.visit_expression_id(id, ctx)?;
+    }
+
+    for id in &i.t {
+        v.visit_expression_id(id, ctx)?;
+    }
+    Ok(())
+}
+
+pub fn visit_permutation_identity<V: Visitor>(
+    v: &mut V,
+    i: &PermutationIdentity,
+    ctx: &Pil,
+) -> Result<V::Error> {
+    if let Some(ref id) = i.sel_f {
+        v.visit_expression_id(id, ctx)?;
+    }
+
+    for id in &i.f {
+        v.visit_expression_id(id, ctx)?;
+    }
+
+    if let Some(ref id) = i.sel_t {
+        v.visit_expression_id(id, ctx)?;
+    }
+
+    for id in &i.t {
+        v.visit_expression_id(id, ctx)?;
+    }
+    Ok(())
+}
+
+pub fn visit_connection_identity<V: Visitor>(
+    v: &mut V,
+    i: &ConnectionIdentity,
+    ctx: &Pil,
+) -> Result<V::Error> {
+    for id in &i.pols {
+        v.visit_expression_id(id, ctx)?;
+    }
+
+    for id in &i.connections {
+        v.visit_expression_id(id, ctx)?;
+    }
+
+    Ok(())
 }
 
 pub fn visit_expression<V: Visitor>(v: &mut V, e: &Expression, ctx: &Pil) -> Result<V::Error> {
@@ -246,17 +348,16 @@ pub fn visit_neg<V: Visitor>(v: &mut V, values: &Neg, ctx: &Pil) -> Result<V::Er
 }
 
 pub fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
-    let (reference_key, reference_inner) = &ctx
-        .references
-        .iter()
-        .filter_map(|(key, r)| match r {
-            Reference::CmP(r) => {
-                (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0)).then_some((key, r))
-            }
-            _ => None,
-        })
-        .next()
-        .unwrap();
+    let (reference_key, reference_inner) =
+        &ctx.references
+            .iter()
+            .filter_map(|(key, r)| match r {
+                Reference::CmP(r) => (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0))
+                    .then_some((key, r)),
+                _ => None,
+            })
+            .next()
+            .unwrap();
 
     v.visit_reference_key(reference_key, ctx)?;
     v.visit_reference_inner(reference_inner, ctx)?;

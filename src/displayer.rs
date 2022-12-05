@@ -1,7 +1,10 @@
 use std::fmt;
 
 use crate::{
-    ast::{Add, Cm, Mul, Number, Pil, PolIdentity, PublicCell, Reference, ReferenceKey, Sub},
+    ast::{
+        Add, Cm, ConnectionIdentity, Mul, Number, PermutationIdentity, Pil, PlookupIdentity,
+        PolIdentity, PublicCell, Reference, ReferenceKey, Sub,
+    },
     visitor::*,
 };
 
@@ -67,12 +70,127 @@ impl<'a, 'b> Visitor for PilDisplayer<'a, 'b> {
             writeln!(self.f)?;
         }
 
+        for i in &p.plookup_identities {
+            self.visit_plookup_identity(i, ctx)?;
+            writeln!(self.f)?;
+        }
+
+        for i in &p.permutation_identities {
+            self.visit_permutation_identity(i, ctx)?;
+            writeln!(self.f)?;
+        }
+
+        for i in &p.connection_identities {
+            self.visit_connection_identity(i, ctx)?;
+            writeln!(self.f)?;
+        }
+
         Ok(())
     }
 
     fn visit_polynomial_identity(&mut self, i: &PolIdentity, ctx: &Pil) -> Result<Self::Error> {
         self.visit_expression(&ctx.expressions[i.e.0], ctx)?;
         write!(self.f, " == 0")
+    }
+
+    fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil) -> Result<Self::Error> {
+        if let Some(ref id) = i.sel_f {
+            self.visit_expression_id(id, ctx)?;
+            write!(self.f, " * ")?;
+        }
+
+        write!(self.f, "[ ")?;
+
+        for id in &i.f {
+            self.visit_expression_id(id, ctx)?;
+            write!(self.f, ", ")?;
+        }
+
+        write!(self.f, "]")?;
+
+        write!(self.f, " in ")?;
+
+        if let Some(ref id) = i.sel_t {
+            self.visit_expression_id(id, ctx)?;
+            write!(self.f, " * ")?;
+        }
+
+        write!(self.f, "[ ")?;
+
+        for id in &i.t {
+            self.visit_expression_id(id, ctx)?;
+            write!(self.f, ", ")?;
+        }
+
+        write!(self.f, "]")?;
+
+        Ok(())
+    }
+
+    fn visit_permutation_identity(
+        &mut self,
+        i: &PermutationIdentity,
+        ctx: &Pil,
+    ) -> Result<Self::Error> {
+        if let Some(ref id) = i.sel_f {
+            self.visit_expression_id(id, ctx)?;
+            write!(self.f, " * ")?;
+        }
+
+        write!(self.f, "[ ")?;
+
+        for id in &i.f {
+            self.visit_expression_id(id, ctx)?;
+            write!(self.f, ", ")?;
+        }
+
+        write!(self.f, "]")?;
+
+        write!(self.f, " is ")?;
+
+        if let Some(ref id) = i.sel_t {
+            self.visit_expression_id(id, ctx)?;
+            write!(self.f, " * ")?;
+        }
+
+        write!(self.f, "[ ")?;
+
+        for id in &i.t {
+            self.visit_expression_id(id, ctx)?;
+            write!(self.f, ", ")?;
+        }
+
+        write!(self.f, "]")?;
+
+        Ok(())
+    }
+
+    fn visit_connection_identity(
+        &mut self,
+        i: &ConnectionIdentity,
+        ctx: &Pil,
+    ) -> Result<Self::Error> {
+        write!(self.f, "[ ")?;
+
+        for id in &i.pols {
+            self.visit_expression_id(id, ctx)?;
+            write!(self.f, ", ")?;
+        }
+
+        write!(self.f, "]")?;
+
+        write!(self.f, " connect ")?;
+
+        write!(self.f, "[ ")?;
+
+        for id in &i.connections {
+            self.visit_expression_id(id, ctx)?;
+            write!(self.f, ", ")?;
+        }
+
+        write!(self.f, "]")?;
+
+        Ok(())
     }
 
     fn visit_reference_key(&mut self, c: &ReferenceKey, _ctx: &Pil) -> Result<Self::Error> {

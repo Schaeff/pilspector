@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt;
-use std::{collections::BTreeMap};
 
 use crate::{
     displayer::PilDisplayer,
