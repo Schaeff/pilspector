@@ -152,7 +152,7 @@ fn visit_polynomial_identity<V: Visitor>(
     i: &PolIdentity,
     ctx: &Pil,
 ) -> Result<V::Error> {
-    v.visit_expression(&ctx.expressions[i.e], ctx)
+    v.visit_expression(&ctx.expressions[i.e.0], ctx)
 }
 
 fn visit_expression<V: Visitor>(v: &mut V, e: &Expression, ctx: &Pil) -> Result<V::Error> {
@@ -219,11 +219,11 @@ fn visit_mul<V: Visitor>(v: &mut V, mul: &Mul, ctx: &Pil) -> Result<V::Error> {
 }
 
 fn visit_exp<V: Visitor>(v: &mut V, exp: &Exp, ctx: &Pil) -> Result<V::Error> {
-    v.visit_expression(&ctx.expressions[exp.id], ctx)
+    v.visit_expression(&ctx.expressions[exp.id.0], ctx)
 }
 
 fn visit_public<V: Visitor>(v: &mut V, public: &Public, ctx: &Pil) -> Result<V::Error> {
-    v.visit_expression(&ctx.expressions[public.id], ctx)
+    v.visit_expression(&ctx.expressions[public.id.0], ctx)
 }
 
 fn visit_neg<V: Visitor>(v: &mut V, values: &Neg, ctx: &Pil) -> Result<V::Error> {

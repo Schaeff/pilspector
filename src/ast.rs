@@ -57,7 +57,7 @@ impl<'a, 'b> Visitor for PilDisplayer<'a, 'b> {
     }
 
     fn visit_polynomial_identity(&mut self, i: &PolIdentity, ctx: &Pil) -> Result<Self::Error> {
-        self.visit_expression(&ctx.expressions[i.e], ctx)?;
+        self.visit_expression(&ctx.expressions[i.e.0], ctx)?;
         write!(self.f, " == 0")
     }
 
@@ -110,11 +110,41 @@ impl fmt::Display for Pil {
 pub type ReferenceKey = String;
 pub type References = BTreeMap<ReferenceKey, ReferenceInner>;
 // the index of the expression in the expression list
-pub type ExpressionId = usize;
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ExpressionId(pub usize);
 // the index of the polynomial
-pub type PolynomialId = usize;
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PolynomialId(pub usize);
+// the index of a public value in the public list
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PublicId(pub usize);
 // the index of a row
-pub type RowId = usize;
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct RowId(pub usize);
+
+impl From<usize> for ExpressionId {
+    fn from(n: usize) -> Self {
+        Self(n)
+    }
+}
+
+impl From<usize> for PolynomialId {
+    fn from(n: usize) -> Self {
+        Self(n)
+    }
+}
+
+impl From<usize> for PublicId {
+    fn from(n: usize) -> Self {
+        Self(n)
+    }
+}
+
+impl From<usize> for RowId {
+    fn from(n: usize) -> Self {
+        Self(n)
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -244,7 +274,7 @@ pub struct Number {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Const {
-    pub id: ExpressionId,
+    pub id: PolynomialId,
     pub next: bool,
 }
 
@@ -268,7 +298,7 @@ pub struct Cm {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Public {
-    pub id: ExpressionId,
+    pub id: PublicId,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -372,12 +402,24 @@ mod test {
             );
 
             // serialize a committed polynomial
-            let e = Expression::Cm(Cm { id: 42, next: true }.deg(1));
+            let e = Expression::Cm(
+                Cm {
+                    id: 42.into(),
+                    next: true,
+                }
+                .deg(1),
+            );
 
             assert_expression(&e, r#"{"deg":1,"op":"cm","id":42,"next":true}"#);
 
             // serialize a const polynomial
-            let e = Expression::Const(Const { id: 42, next: true }.deg(1));
+            let e = Expression::Const(
+                Const {
+                    id: 42.into(),
+                    next: true,
+                }
+                .deg(1),
+            );
 
             assert_expression(&e, r#"{"deg":1,"op":"const","id":42,"next":true}"#);
         }
