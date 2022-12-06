@@ -53,7 +53,7 @@ impl Pil {
         let key = r
             .len
             .map(|_| format!("{}[{}]", key, cm.id.0 - r.id.0))
-            .unwrap_or(key.clone());
+            .unwrap_or_else(|| key.clone());
 
         (key, r)
     }
@@ -77,7 +77,7 @@ impl Pil {
         let key = r
             .len
             .map(|_| format!("{}[{}]", key, c.id.0 - r.id.0))
-            .unwrap_or(key.clone());
+            .unwrap_or_else(|| key.clone());
 
         (key, r)
     }

@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        Add, Cm, ConnectionIdentity, Const, Mul, Number, PermutationIdentity, Pil, PlookupIdentity,
+        Add, Cm, ConnectionIdentity, Mul, Number, PermutationIdentity, Pil, PlookupIdentity,
         PolIdentity, PublicCell, Reference, ReferenceKey, Sub,
     },
     visitor::*,
