@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        Add, Cm, ConnectionIdentity, Mul, Number, PermutationIdentity, Pil, PlookupIdentity,
-        PolIdentity, PublicCell, Reference, ReferenceKey, Sub,
+        Add, Cm, ConnectionIdentity, IndexedReferenceKey, Mul, Number, PermutationIdentity, Pil,
+        PlookupIdentity, PolIdentity, PublicCell, Reference, ReferenceKey, Sub,
     },
     visitor::*,
 };
@@ -99,6 +99,14 @@ impl Visitor for PilDisplayer {
     fn visit_polynomial_identity(&mut self, i: &PolIdentity, ctx: &Pil) -> Result<Self::Error> {
         self.visit_expression(&ctx.expressions[i.e.0], ctx)?;
         write!(self.f, " == 0")
+    }
+
+    fn visit_indexed_reference_key(
+        &mut self,
+        c: &IndexedReferenceKey,
+        _: &Pil,
+    ) -> Result<Self::Error> {
+        write!(self.f, "{}", c)
     }
 
     fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil) -> Result<Self::Error> {
