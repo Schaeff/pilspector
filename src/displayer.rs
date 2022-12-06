@@ -1,5 +1,3 @@
-use std::fmt;
-
 use crate::{
     ast::{
         Add, Cm, ConnectionIdentity, Mul, Number, PermutationIdentity, Pil, PlookupIdentity,
@@ -8,12 +6,15 @@ use crate::{
     visitor::*,
 };
 
-pub struct PilDisplayer<'a, 'b> {
-    pub f: &'a mut fmt::Formatter<'b>,
+use std::io::Write;
+
+#[derive(Default)]
+pub struct PilDisplayer {
+    pub f: Vec<u8>,
 }
 
-impl<'a, 'b> Visitor for PilDisplayer<'a, 'b> {
-    type Error = fmt::Error;
+impl Visitor for PilDisplayer {
+    type Error = std::io::Error;
 
     fn visit_public_cell(&mut self, cell: &PublicCell, ctx: &Pil) -> Result<Self::Error> {
         write!(self.f, "public ")?;
@@ -24,6 +25,7 @@ impl<'a, 'b> Visitor for PilDisplayer<'a, 'b> {
             &Cm {
                 id: cell.pol_id,
                 next: false,
+                symbolic: false,
             },
             ctx,
         )?;

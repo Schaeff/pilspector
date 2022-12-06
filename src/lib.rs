@@ -1,9 +1,9 @@
 mod analyser;
-mod ast;
+pub mod ast;
 mod displayer;
+pub mod smt_encoder;
 mod validator;
 mod visitor;
-mod stringer;
 
 #[cfg(test)]
 mod test {

@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::{
-    stringer::PilDisplayer,
+    displayer::PilDisplayer,
     validator::Validator,
     visitor::{Result, Visitor},
 };
@@ -84,7 +84,7 @@ impl Pil {
 impl fmt::Display for Pil {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut displayer = PilDisplayer::default();
-        displayer.visit_pil(&self).unwrap();
+        displayer.visit_pil(self).unwrap();
         write!(f, "{}", String::from_utf8(displayer.f).unwrap())
     }
 }
