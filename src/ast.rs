@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::{
-    displayer::PilDisplayer,
+    stringer::PilDisplayer,
     validator::Validator,
     visitor::{Result, Visitor},
 };
@@ -72,11 +72,20 @@ impl Pil {
             .next()
             .unwrap()
     }
+
+    pub fn get_expression(
+        &self,
+        i: &ExpressionId
+    ) -> &Expression {
+        &self.expressions[i.0]
+    }
 }
 
 impl fmt::Display for Pil {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        PilDisplayer { f }.visit_pil(self)
+        let mut displayer = PilDisplayer::default();
+        displayer.visit_pil(&self).unwrap();
+        write!(f, "{}", String::from_utf8(displayer.f).unwrap())
     }
 }
 
@@ -185,7 +194,7 @@ pub struct PublicCell {
     pub name: PublicCellKey,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "op")]
@@ -201,7 +210,7 @@ pub enum Expression {
     Const(ExpressionWrapper<Const>),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpressionWrapper<E> {
@@ -234,7 +243,7 @@ impl Expr for Number {}
 impl Expr for Const {}
 impl Expr for Exp {}
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Top {
@@ -242,35 +251,35 @@ pub struct Top {
     deps: Vec<ExpressionId>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Add {
     pub values: Box<[Expression; 2]>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Sub {
     pub values: Box<[Expression; 2]>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Mul {
     pub values: Box<[Expression; 2]>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Neg {
     pub values: Box<[Expression; 1]>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Number {
@@ -283,9 +292,21 @@ pub struct Number {
 pub struct Const {
     pub id: ConstantPolynomialId,
     pub next: bool,
+    #[serde(default)]
+    pub symbolic: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+impl PartialEq for Const {
+    fn eq(&self, other: &Self) -> bool {
+        if self.symbolic != other.symbolic {
+            true
+        } else {
+            self.id == other.id && self.next == other.next
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Exp {
@@ -299,9 +320,21 @@ pub struct Exp {
 pub struct Cm {
     pub id: CommittedPolynomialId,
     pub next: bool,
+    #[serde(default)]
+    pub symbolic: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+impl PartialEq for Cm {
+    fn eq(&self, other: &Self) -> bool {
+        if self.symbolic != other.symbolic {
+            true
+        } else {
+            self.id == other.id && self.next == other.next
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Public {
@@ -413,6 +446,7 @@ mod test {
                 Cm {
                     id: 42.into(),
                     next: true,
+                    symbolic: false
                 }
                 .deg(1),
             );
@@ -424,6 +458,7 @@ mod test {
                 Const {
                     id: 42.into(),
                     next: true,
+                    symbolic: false,
                 }
                 .deg(1),
             );

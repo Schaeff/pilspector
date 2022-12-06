@@ -3,6 +3,7 @@ mod ast;
 mod displayer;
 mod validator;
 mod visitor;
+mod stringer;
 
 #[cfg(test)]
 mod test {
