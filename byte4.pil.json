@@ -1,0 +1,170 @@
+{
+ "nCommitments": 2,
+ "nQ": 0,
+ "nIm": 0,
+ "nConstants": 4,
+ "publics": [],
+ "references": {
+  "Global.L1": {
+   "type": "constP",
+   "id": 0,
+   "polDeg": null,
+   "isArray": false
+  },
+  "Global.BYTE": {
+   "type": "constP",
+   "id": 1,
+   "polDeg": null,
+   "isArray": false
+  },
+  "Global.BYTE2": {
+   "type": "constP",
+   "id": 2,
+   "polDeg": null,
+   "isArray": false
+  },
+  "Byte4.SET": {
+   "type": "constP",
+   "id": 3,
+   "polDeg": null,
+   "isArray": false
+  },
+  "Byte4.freeIN": {
+   "type": "cmP",
+   "id": 0,
+   "polDeg": null,
+   "isArray": false
+  },
+  "Byte4.out": {
+   "type": "cmP",
+   "id": 1,
+   "polDeg": null,
+   "isArray": false
+  }
+ },
+ "expressions": [
+  {
+   "op": "cm",
+   "deg": 1,
+   "id": 0,
+   "next": false
+  },
+  {
+   "op": "const",
+   "deg": 1,
+   "id": 2,
+   "next": false
+  },
+  {
+   "op": "sub",
+   "deg": 2,
+   "values": [
+    {
+     "op": "cm",
+     "deg": 1,
+     "id": 1,
+     "next": true
+    },
+    {
+     "op": "add",
+     "deg": 2,
+     "values": [
+      {
+       "op": "mul",
+       "deg": 2,
+       "values": [
+        {
+         "op": "const",
+         "deg": 1,
+         "id": 3,
+         "next": false
+        },
+        {
+         "op": "cm",
+         "deg": 1,
+         "id": 0,
+         "next": false
+        }
+       ]
+      },
+      {
+       "op": "mul",
+       "deg": 2,
+       "values": [
+        {
+         "op": "sub",
+         "deg": 1,
+         "values": [
+          {
+           "op": "number",
+           "deg": 0,
+           "value": "1"
+          },
+          {
+           "op": "const",
+           "deg": 1,
+           "id": 3,
+           "next": false
+          }
+         ]
+        },
+        {
+         "op": "add",
+         "deg": 1,
+         "values": [
+          {
+           "op": "mul",
+           "deg": 1,
+           "values": [
+            {
+             "op": "cm",
+             "deg": 1,
+             "id": 1,
+             "next": false
+            },
+            {
+             "op": "number",
+             "deg": 0,
+             "value": "65536"
+            }
+           ]
+          },
+          {
+           "op": "cm",
+           "deg": 1,
+           "id": 0,
+           "next": false
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "polIdentities": [
+  {
+   "e": 2,
+   "fileName": "byte4.pil",
+   "line": 30
+  }
+ ],
+ "plookupIdentities": [
+  {
+   "f": [
+    0
+   ],
+   "t": [
+    1
+   ],
+   "selF": null,
+   "selT": null,
+   "fileName": "byte4.pil",
+   "line": 28
+  }
+ ],
+ "permutationIdentities": [],
+ "connectionIdentities": []
+}
