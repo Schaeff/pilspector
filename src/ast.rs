@@ -35,6 +35,39 @@ pub struct Pil {
 }
 
 impl Pil {
+    pub fn get_cm_reference(
+        &self,
+        cm: &Cm,
+    ) -> (&ReferenceKey, &ReferenceInner<CommittedPolynomialId>) {
+        self.references
+            .iter()
+            .filter_map(|(key, r)| match r {
+                Reference::CmP(r) => (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0))
+                    .then_some((key, r)),
+                _ => None,
+            })
+            .next()
+            .unwrap()
+    }
+
+    pub fn get_const_reference(
+        &self,
+        c: &Const,
+    ) -> (&ReferenceKey, &ReferenceInner<ConstantPolynomialId>) {
+        self.references
+            .iter()
+            .filter_map(|(key, r)| match r {
+                Reference::ConstP(r) => {
+                    (c.id.0 >= r.id.0 && c.id.0 <= r.id.0 + r.len.unwrap_or(0)).then_some((key, r))
+                }
+                _ => None,
+            })
+            .next()
+            .unwrap()
+    }
+}
+
+impl Pil {
     #[allow(unused)]
     pub fn validate(&self) -> Result<String> {
         Validator::default().visit_pil(self)
