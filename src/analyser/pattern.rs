@@ -1,5 +1,6 @@
 use crate::{
-    ast::{Pil, Expression, PolIdentity},
+    ast::{Expression, Pil, PolIdentity},
+    displayer::PilDisplayer,
     visitor::{Result, Visitor},
 };
 
@@ -9,7 +10,7 @@ pub struct PatternDetector {
 }
 
 impl PatternDetector {
-    pub fn detect(pil: &Pil) -> Vec<Expression> {
+    pub fn detect(pil: &Pil) -> String {
         let pattern: Expression = serde_json::from_str(
             r#"  {
             "op": "sub",
@@ -82,10 +83,22 @@ impl PatternDetector {
         )
         .unwrap();
 
-        let mut detector = PatternDetector { pattern, occurrences: vec![] };
+        let mut detector = PatternDetector {
+            pattern,
+            occurrences: vec![],
+        };
         detector.visit_pil(&pil).unwrap();
 
-        detector.occurrences
+        detector
+            .occurrences
+            .iter()
+            .map(|e| {
+                let mut displayer = PilDisplayer::default();
+                displayer.visit_expression(e, &pil).unwrap();
+                String::from_utf8(displayer.f).unwrap()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -112,6 +125,6 @@ mod test {
         let pil_str = std::fs::read_to_string("binary.pil.json").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
-        println!("occurrences {:#?}", &PatternDetector::detect(&pil));
+        println!("occurrences\n{}", &PatternDetector::detect(&pil));
     }
 }

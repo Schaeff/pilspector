@@ -73,10 +73,7 @@ impl Pil {
             .unwrap()
     }
 
-    pub fn get_expression(
-        &self,
-        i: &ExpressionId
-    ) -> &Expression {
+    pub fn get_expression(&self, i: &ExpressionId) -> &Expression {
         &self.expressions[i.0]
     }
 }
@@ -293,6 +290,7 @@ pub struct Const {
     pub id: ConstantPolynomialId,
     pub next: bool,
     #[serde(default)]
+    #[serde(skip_serializing)]
     pub symbolic: bool,
 }
 
@@ -321,6 +319,7 @@ pub struct Cm {
     pub id: CommittedPolynomialId,
     pub next: bool,
     #[serde(default)]
+    #[serde(skip_serializing)]
     pub symbolic: bool,
 }
 
@@ -446,7 +445,7 @@ mod test {
                 Cm {
                     id: 42.into(),
                     next: true,
-                    symbolic: false
+                    symbolic: false,
                 }
                 .deg(1),
             );

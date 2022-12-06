@@ -11,12 +11,15 @@ pub struct OccurrenceCounter {
 }
 
 impl OccurrenceCounter {
-    pub fn count(pil: &Pil) -> Vec<(ReferenceKey, usize)> {
+    pub fn count(pil: &Pil) -> String {
         let mut ranker = OccurrenceCounter::default();
         ranker.visit_pil(pil).unwrap();
         let mut res: Vec<_> = ranker.occurrences.drain().collect();
         res.sort_by(|(_, n0), (_, n1)| n0.partial_cmp(n1).unwrap());
-        res
+        res.iter()
+            .map(|(name, count)| format!("{} : {}", name, count))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -38,7 +41,7 @@ mod test {
 
     #[test]
     fn rank_adder() {
-        let pil_str = std::fs::read_to_string("adder.pil.json").unwrap();
+        let pil_str = std::fs::read_to_string("main.pil.json").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
         println!("occurrences {:#?}", &OccurrenceCounter::count(&pil)[0..50]);
