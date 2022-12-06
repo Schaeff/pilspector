@@ -5,10 +5,9 @@
 	expression = { unaried_term ~ (op_binary ~ unaried_term)* }
 	unaried_term = { op_unary? ~ powered_term }
 	powered_term = { postfixed_term ~ (op_pow ~ exponent_expression)? }
-	postfixed_term = { term ~ access* }
+	postfixed_term = { term ~ array_access? }
 	term = { ("(" ~ expression ~ ")")  | primary_expression }
 
-	access = { array_access }
 	array_access = { "[" ~ decimal_number ~ "]" }
 
 	primary_expression = { identifier | literal }

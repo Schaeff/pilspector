@@ -13,10 +13,13 @@ pub fn parse_expression(source: &str) -> Result<Expression, String> {
     }
 }
 
-
 #[derive(Parser)]
 #[grammar = "parser/pil.pest"]
 struct PilParser;
+
+impl Polynomial {
+    fn from(pair: Pair<Rule>) -> Polynomial {}
+}
 
 // impl Identifier {
 //     fn from(pair: Pair<Rule>, next_identifier: &mut u64) -> Identifier {
@@ -452,7 +455,6 @@ struct PilParser;
 //         Root { inner, location }
 //     }
 // }
-
 
 // pub fn parse_block(source: &str) -> Result<Block, String> {
 //     match parse_root(source)?.inner {
