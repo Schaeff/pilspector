@@ -3,11 +3,21 @@ use crate::ast::*;
 use pest::iterators::Pair;
 use pest::Parser;
 
+pub fn parse_polynomial(source: &str) -> Result<Polynomial, String> {
+    match PilParser::parse(Rule::polynomial, source) {
+        Ok(mut pairs) => {
+            let mut next_identifier = 1u64;
+            Ok(Polynomial::from(pairs.next().unwrap()))
+        }
+        Err(error) => Err(format!("{}", error)),
+    }
+}
+
 pub fn parse_expression(source: &str) -> Result<Expression, String> {
     match PilParser::parse(Rule::expression, source) {
         Ok(mut pairs) => {
             let mut next_identifier = 1u64;
-            Ok(Root::from(pairs.next().unwrap(), &mut next_identifier))
+            Ok(Expression::from(pairs.next().unwrap()))
         }
         Err(error) => Err(format!("{}", error)),
     }
@@ -17,8 +27,48 @@ pub fn parse_expression(source: &str) -> Result<Expression, String> {
 #[grammar = "parser/pil.pest"]
 struct PilParser;
 
+pub struct Polynomial {
+    name: String,
+    definition: Expression,
+}
+
+pub enum Expression {
+    Sum(Vec<Expression>),
+    Difference(VecBox<Expression>, Box<Expression>),
+    Product(Box<Expression>, Box<Expression>),
+    ArrayAccess(String, usize),
+    Identifier(String),
+    Literal(String)
+}
+
 impl Polynomial {
-    fn from(pair: Pair<Rule>) -> Polynomial {}
+    fn from(pair: Pair<Rule>) -> Polynomial {
+        let mut token_iter = pair.into_inner();
+        let name = token_iter.next().unwrap().as_str().to_string();
+        let definition = Expression::from(token_iter.next().unwrap());
+
+        Polynomial {
+            name,
+            definition
+        }
+    }
+}
+
+impl Expression {
+    fn from(pair: Pair<Rule>) -> Expression {
+        match pair.as_rule() {
+            Rule::expression => {
+                let inner = pair.into_inner();
+                if inner.count() == 1 {
+                    Expression::from(inner.next().unwrap())
+                } else {
+                    Expression::Product()
+                }
+
+            }
+            _ => panic!("Invalid rule")
+        }
+    }
 }
 
 // impl Identifier {

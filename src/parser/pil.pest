@@ -1,49 +1,50 @@
-	//root = { soi ~ (object | block) ~ eoi  }
+//root = { soi ~ (object | block) ~ eoi  }
 
-	polynomial = { "pol" ~ identifier ~ "=" ~ expression ~ ";" }
+polynomial = { "pol" ~ identifier ~ "=" ~ expression ~ ";" }
 
-	expression = { unaried_term ~ (op_binary ~ unaried_term)* }
-	unaried_term = { op_unary? ~ powered_term }
-	powered_term = { postfixed_term ~ (op_pow ~ exponent_expression)? }
-	postfixed_term = { term ~ array_access? }
-	term = { ("(" ~ expression ~ ")")  | primary_expression }
+expression = { product ~ ( ( op_add | op_sub ) ~ product)* }
+product = { unaried_term ~ (op_mul ~ unaried_term)* }
+unaried_term = { op_unary? ~ powered_term }
+powered_term = { postfixed_term ~ (op_pow ~ exponent_expression)? }
+postfixed_term = { term ~ array_access? }
+term = { ("(" ~ expression ~ ")")  | primary_expression }
 
-	array_access = { "[" ~ decimal_number ~ "]" }
+array_access = { "[" ~ decimal_number ~ "]" }
 
-	primary_expression = { identifier | literal }
+primary_expression = { identifier | literal }
 
-	exponent_expression = { "(" ~ expression ~ ")" | primary_expression }
+exponent_expression = { "(" ~ expression ~ ")" | primary_expression }
 
-	// End Expressions
+// End Expressions
 
 
-	identifier = @{ ((!keyword ~ ASCII_ALPHA) | (keyword ~ (ASCII_ALPHANUMERIC | "_"))) ~ (ASCII_ALPHANUMERIC | "_")* }
+identifier = @{ ((!keyword ~ ASCII_ALPHA) | (keyword ~ (ASCII_ALPHANUMERIC | "_"))) ~ (ASCII_ALPHANUMERIC | "_")* }
 
-	// Literals for all types
+// Literals for all types
 
-	literal = { decimal_literal }
+literal = { decimal_literal }
 
-	decimal_literal = ${ decimal_number }
-	decimal_number = @{ "0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
+decimal_literal = ${ decimal_number }
+decimal_number = @{ "0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 
-	// Operators
+// Operators
 
-	op_equal = @{"="}
-	op_add = {"+"}
-	op_sub = {"-"}
-	op_mul = {"*"}
-	op_pow = @{"**"}
-	op_neg = {"-"}
+op_equal = @{"="}
+op_add = {"+"}
+op_sub = {"-"}
+op_mul = {"*"}
+op_pow = @{"**"}
+op_neg = {"-"}
 
-	// `op_pow` is *not* in `op_binary` because its precedence is handled in this parser rather than down the line in precedence climbing
-	op_binary = _ { op_equal | op_add | op_sub | op_mul }
-	op_unary = { op_neg }
+// `op_pow` is *not* in `op_binary` because its precedence is handled in this parser rather than down the line in precedence climbing
+op_binary = _ { op_equal | op_add | op_sub | op_mul }
+op_unary = { op_neg }
 
-	WHITESPACE = _{ " " | "\t" | "\\" | COMMENT | NEWLINE }
-	COMMENT = _{ ("/*" ~ (!"*/" ~ ANY)* ~ "*/") | ("//" ~ (!NEWLINE ~ ANY)*) }
+WHITESPACE = _{ " " | "\t" | "\\" | COMMENT | NEWLINE }
+COMMENT = _{ ("/*" ~ (!"*/" ~ ANY)* ~ "*/") | ("//" ~ (!NEWLINE ~ ANY)*) }
 
-	// the ordering of reserved keywords matters: if "as" is before "assert", then "assert" gets parsed as (as)(sert) and incorrectly
-	// accepted
-	keyword = @{
-		"pol"|"commit"|"constant"
-	}
+// the ordering of reserved keywords matters: if "as" is before "assert", then "assert" gets parsed as (as)(sert) and incorrectly
+// accepted
+keyword = @{
+	"pol"|"commit"|"constant"
+}
