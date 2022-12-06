@@ -151,6 +151,14 @@ pub trait Visitor: Sized {
         visit_reference_key(self, c, ctx)
     }
 
+    fn visit_indexed_reference_key(
+        &mut self,
+        c: &IndexedReferenceKey,
+        ctx: &Pil,
+    ) -> Result<Self::Error> {
+        visit_indexed_reference_key(self, c, ctx)
+    }
+
     fn visit_reference(&mut self, r: &Reference, ctx: &Pil) -> Result<Self::Error> {
         visit_reference(self, r, ctx)
     }
@@ -348,21 +356,28 @@ pub fn visit_neg<V: Visitor>(v: &mut V, values: &Neg, ctx: &Pil) -> Result<V::Er
 }
 
 pub fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
-    let (reference_key, reference_inner) = ctx.get_cm_reference(cm);
+    let (indexed_reference_key, reference_inner) = ctx.get_cm_reference(cm);
 
-    v.visit_reference_key(reference_key, ctx)?;
+    v.visit_indexed_reference_key(&indexed_reference_key, ctx)?;
     v.visit_reference_inner(reference_inner, ctx)?;
     v.visit_next(&cm.next, ctx)
 }
 
 pub fn visit_const<V: Visitor>(v: &mut V, c: &Const, ctx: &Pil) -> Result<V::Error> {
-    let (reference_key, reference_inner) = ctx.get_const_reference(c);
+    let (indexed_reference_key, reference_inner) = ctx.get_const_reference(c);
 
-    v.visit_reference_key(reference_key, ctx)?;
+    v.visit_indexed_reference_key(&indexed_reference_key, ctx)?;
     v.visit_reference_inner(reference_inner, ctx)?;
     v.visit_next(&c.next, ctx)
 }
 
+pub fn visit_indexed_reference_key<V: Visitor>(
+    v: &mut V,
+    k: &IndexedReferenceKey,
+    ctx: &Pil,
+) -> Result<V::Error> {
+    v.visit_reference_key(k.key, ctx)
+}
 pub fn visit_expression_id<V: Visitor>(
     v: &mut V,
     id: &ExpressionId,

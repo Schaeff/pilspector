@@ -1,7 +1,11 @@
 use std::fmt;
 
 use crate::{
-    ast::{ConnectionIdentity, Expression, PermutationIdentity, Pil, PlookupIdentity, PublicCell},
+    ast::{
+        ConnectionIdentity, Expression, IndexedReferenceKey, PermutationIdentity, Pil,
+        PlookupIdentity, PublicCell,
+    },
+    smt::*,
     visitor::*,
 };
 
@@ -21,32 +25,55 @@ impl SmtPil {
     }
 }
 
-pub struct SmtEncoder<'a, 'b> {
-    pub f: &'a mut fmt::Formatter<'b>,
+pub struct SmtEncoder {
+    pub smt: Vec<SMTStatement>,
+}
+
+impl SmtEncoder {
+    fn out(&mut self, statement: SMTStatement) {
+        self.smt.push(statement);
+    }
 }
 
 impl fmt::Display for SmtPil {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut encoder = SmtEncoder { f };
-        encoder.visit_pil(&self.pil)
+        let mut encoder = SmtEncoder {
+            smt: Vec::default(),
+        };
+        encoder.visit_pil(&self.pil)?;
+
+        writeln!(
+            f,
+            "; Uncomment the line below to enable proofs\n;(set-option :produce-proofs true)"
+        )?;
+        writeln!(
+            f,
+            "{}",
+            encoder
+                .smt
+                .iter()
+                .map(|s| s.as_smt())
+                .collect::<Vec<_>>()
+                .join("\n")
+        )?;
+
+        writeln!(f, "(check-sat)\n(get-model)")?;
+
+        Ok(())
     }
 }
 
-impl<'a, 'b> Visitor for SmtEncoder<'a, 'b> {
+impl Visitor for SmtEncoder {
     type Error = std::fmt::Error;
 
     fn visit_pil(&mut self, p: &Pil) -> Result<Self::Error> {
         let ctx = p;
 
-        writeln!(self.f, "(set-option :produce-proofs true)")?;
-
-        writeln!(self.f)?;
-
         for key in p.references.keys() {
             // ignore columns which are used in ranges
             if !RANGES.iter().any(|(k, _)| k == key) {
                 let key = key.clone().replace('.', "_");
-                writeln!(self.f, "(declare-const {} Int)", key)?;
+                self.out(declare_const(SMTVariable::new(key, SMTSort::Int)));
             }
         }
 
@@ -118,7 +145,12 @@ impl<'a, 'b> Visitor for SmtEncoder<'a, 'b> {
                     let (key, _) = ctx.get_const_reference(&w.inner);
                     RANGES
                         .iter()
-                        .find(|(k, _)| key == k)
+                        .find(|(k, _)| {
+                            key == IndexedReferenceKey {
+                                key: &String::from(*k),
+                                index: None,
+                            }
+                        })
                         .unwrap_or_else(|| panic!("const {} does not have a known range", key))
                         .1
                 }
@@ -127,17 +159,11 @@ impl<'a, 'b> Visitor for SmtEncoder<'a, 'b> {
         });
 
         for (key, max) in keys.zip(max) {
+            let key = key.to_string();
             let key = key.clone().replace('.', "_");
+            let var = SMTVariable::new(key, SMTSort::Int);
 
-            writeln!(
-                self.f,
-                r#"
-(assert (and
-    (>= {} 0)
-    (<= {} {})
-))"#,
-                key, key, max
-            )?;
+            self.out(assert(and(ge(var.clone(), 0), le(var, max as u64))));
         }
 
         Ok(())

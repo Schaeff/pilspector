@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        Add, Cm, ConnectionIdentity, Mul, Number, PermutationIdentity, Pil, PlookupIdentity,
-        PolIdentity, PublicCell, Reference, ReferenceKey, Sub,
+        Add, Cm, ConnectionIdentity, IndexedReferenceKey, Mul, Number, PermutationIdentity, Pil,
+        PlookupIdentity, PolIdentity, PublicCell, Reference, ReferenceKey, Sub,
     },
     visitor::*,
 };
@@ -43,21 +43,28 @@ impl Visitor for PilDisplayer {
         for (key, r) in &p.references {
             write!(self.f, "pol")?;
 
-            match r {
-                Reference::CmP(_) => {
+            let size = match r {
+                Reference::CmP(r) => {
                     write!(self.f, " commit")?;
+                    r.len
                 }
-                Reference::ConstP(_) => {
+                Reference::ConstP(r) => {
                     write!(self.f, " constant")?;
+                    r.len
                 }
-                Reference::ImP(_) => {
+                Reference::ImP(r) => {
                     write!(self.f, "")?;
+                    r.len
                 }
-            }
+            };
 
             write!(self.f, " ")?;
 
             write!(self.f, "{}", key)?;
+
+            if let Some(size) = size {
+                write!(self.f, "[{}]", size)?;
+            }
 
             if let Reference::ImP(r) = r {
                 write!(self.f, " == ")?;
@@ -93,6 +100,14 @@ impl Visitor for PilDisplayer {
     fn visit_polynomial_identity(&mut self, i: &PolIdentity, ctx: &Pil) -> Result<Self::Error> {
         self.visit_expression(&ctx.expressions[i.e.0], ctx)?;
         write!(self.f, " == 0")
+    }
+
+    fn visit_indexed_reference_key(
+        &mut self,
+        c: &IndexedReferenceKey,
+        _: &Pil,
+    ) -> Result<Self::Error> {
+        write!(self.f, "{}", c)
     }
 
     fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil) -> Result<Self::Error> {
