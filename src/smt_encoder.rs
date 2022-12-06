@@ -1,7 +1,10 @@
 use std::fmt;
 
 use crate::{
-    ast::{ConnectionIdentity, Expression, PermutationIdentity, Pil, PlookupIdentity, PublicCell},
+    ast::{
+        ConnectionIdentity, Expression, IndexedReferenceKey, PermutationIdentity, Pil,
+        PlookupIdentity, PublicCell,
+    },
     smt::*,
     visitor::*,
 };
@@ -142,7 +145,12 @@ impl Visitor for SmtEncoder {
                     let (key, _) = ctx.get_const_reference(&w.inner);
                     RANGES
                         .iter()
-                        .find(|(k, _)| key == *k)
+                        .find(|(k, _)| {
+                            key == IndexedReferenceKey {
+                                key: &String::from(*k),
+                                index: None,
+                            }
+                        })
                         .unwrap_or_else(|| panic!("const {} does not have a known range", key))
                         .1
                 }
@@ -151,6 +159,7 @@ impl Visitor for SmtEncoder {
         });
 
         for (key, max) in keys.zip(max) {
+            let key = key.to_string();
             let key = key.clone().replace('.', "_");
             let var = SMTVariable::new(key, SMTSort::Int);
 

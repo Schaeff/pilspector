@@ -38,7 +38,7 @@ impl Pil {
     pub fn get_cm_reference(
         &self,
         cm: &Cm,
-    ) -> (ReferenceKey, &ReferenceInner<CommittedPolynomialId>) {
+    ) -> (IndexedReferenceKey, &ReferenceInner<CommittedPolynomialId>) {
         let (key, r) = self
             .references
             .iter()
@@ -50,10 +50,10 @@ impl Pil {
             .next()
             .unwrap();
 
-        let key = r
-            .len
-            .map(|_| format!("{}[{}]", key, cm.id.0 - r.id.0))
-            .unwrap_or_else(|| key.clone());
+        let key = IndexedReferenceKey {
+            key,
+            index: r.len.map(|_| cm.id.0 - r.id.0),
+        };
 
         (key, r)
     }
@@ -61,7 +61,7 @@ impl Pil {
     pub fn get_const_reference(
         &self,
         c: &Const,
-    ) -> (ReferenceKey, &ReferenceInner<ConstantPolynomialId>) {
+    ) -> (IndexedReferenceKey, &ReferenceInner<ConstantPolynomialId>) {
         let (key, r) = self
             .references
             .iter()
@@ -74,10 +74,10 @@ impl Pil {
             .next()
             .unwrap();
 
-        let key = r
-            .len
-            .map(|_| format!("{}[{}]", key, c.id.0 - r.id.0))
-            .unwrap_or_else(|| key.clone());
+        let key = IndexedReferenceKey {
+            key,
+            index: r.len.map(|_| c.id.0 - r.id.0),
+        };
 
         (key, r)
     }
@@ -100,6 +100,23 @@ impl fmt::Display for Pil {
 
 pub type PublicCellKey = String;
 pub type ReferenceKey = String;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexedReferenceKey<'a> {
+    pub key: &'a ReferenceKey,
+    pub index: Option<usize>,
+}
+
+impl<'a> fmt::Display for IndexedReferenceKey<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.key)?;
+        if let Some(index) = self.index {
+            write!(f, "[{}]", index)?;
+        }
+        Ok(())
+    }
+}
+
 pub type References = BTreeMap<ReferenceKey, Reference>;
 // the index of the expression in the expression list
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
