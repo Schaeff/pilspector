@@ -1,4 +1,4 @@
-mod analyser;
+pub mod analyser;
 pub mod ast;
 mod displayer;
 mod smt;

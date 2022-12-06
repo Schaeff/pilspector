@@ -431,7 +431,7 @@ pub fn visit_public_cell<V: Visitor>(v: &mut V, cell: &PublicCell, ctx: &Pil) ->
         &Cm {
             id: cell.pol_id,
             next: false,
-            symbolic: false
+            symbolic: false,
         },
         ctx,
     )
