@@ -76,7 +76,9 @@ impl Pil {
 
 impl fmt::Display for Pil {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        PilDisplayer { f }.visit_pil(self)
+        let mut displayer = PilDisplayer::default();
+        displayer.visit_pil(self).unwrap();
+        write!(f, "{}", String::from_utf8(displayer.f).unwrap())
     }
 }
 
