@@ -11,8 +11,14 @@ const RANGES: [(&str, usize); 2] = [
     ("Global.BYTE", u8::MAX as usize),
 ];
 
-struct SmtPil {
+pub struct SmtPil {
     pil: Pil,
+}
+
+impl SmtPil {
+    pub fn new(pil: Pil) -> Self {
+        Self { pil }
+    }
 }
 
 pub struct SmtEncoder<'a, 'b> {
@@ -147,7 +153,7 @@ mod test {
         let pil_str = std::fs::read_to_string("byte4.pil.json").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
-        let smt_pil = SmtPil { pil };
+        let smt_pil = SmtPil::new(pil);
 
         println!("{}", smt_pil);
     }

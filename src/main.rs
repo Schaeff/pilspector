@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
 use pilspector::ast::Pil;
+use pilspector::smt_encoder::SmtPil;
 
 #[derive(Debug, Parser)]
 #[clap(name = "Pilspector", version = env!("CARGO_PKG_VERSION"))]
@@ -13,6 +14,7 @@ struct Opts {
 pub enum Subcommands {
     #[clap(about = "Pretty print a compiled PIL JSON.")]
     Display(Args),
+    SMT(Args),
 }
 
 #[derive(Debug, Clone, Parser, Default)]
@@ -33,6 +35,12 @@ fn main() {
             let pil_str = std::fs::read_to_string(args.input_file).unwrap();
             let pil: Pil = serde_json::from_str(&pil_str).unwrap();
             println!("{}", pil);
+        }
+        Subcommands::SMT(args) => {
+            let pil_str = std::fs::read_to_string(args.input_file).unwrap();
+            let pil: Pil = serde_json::from_str(&pil_str).unwrap();
+            let smt_pil = SmtPil::new(pil);
+            println!("{}", smt_pil);
         }
     }
 }
