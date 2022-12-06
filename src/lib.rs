@@ -1,5 +1,6 @@
 pub mod ast;
 mod displayer;
+mod smt_encoder;
 mod validator;
 mod visitor;
 
