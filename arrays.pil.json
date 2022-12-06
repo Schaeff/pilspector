@@ -1,0 +1,77 @@
+{
+ "nCommitments": 2,
+ "nQ": 0,
+ "nIm": 0,
+ "nConstants": 2,
+ "publics": [],
+ "references": {
+  "Array.x": {
+   "type": "cmP",
+   "id": 0,
+   "polDeg": null,
+   "isArray": true,
+   "len": 2
+  },
+  "Array.y": {
+   "type": "constP",
+   "id": 0,
+   "polDeg": null,
+   "isArray": true,
+   "len": 2
+  }
+ },
+ "expressions": [
+  {
+   "op": "sub",
+   "deg": 2,
+   "values": [
+    {
+     "op": "mul",
+     "deg": 2,
+     "values": [
+      {
+       "op": "cm",
+       "deg": 1,
+       "id": 0,
+       "next": false
+      },
+      {
+       "op": "const",
+       "deg": 1,
+       "id": 1,
+       "next": false
+      }
+     ]
+    },
+    {
+     "op": "mul",
+     "deg": 2,
+     "values": [
+      {
+       "op": "cm",
+       "deg": 1,
+       "id": 1,
+       "next": false
+      },
+      {
+       "op": "const",
+       "deg": 1,
+       "id": 0,
+       "next": false
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "polIdentities": [
+  {
+   "e": 0,
+   "fileName": "arrays.pil",
+   "line": 5
+  }
+ ],
+ "plookupIdentities": [],
+ "permutationIdentities": [],
+ "connectionIdentities": []
+}

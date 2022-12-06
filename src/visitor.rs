@@ -350,7 +350,7 @@ pub fn visit_neg<V: Visitor>(v: &mut V, values: &Neg, ctx: &Pil) -> Result<V::Er
 pub fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
     let (reference_key, reference_inner) = ctx.get_cm_reference(cm);
 
-    v.visit_reference_key(reference_key, ctx)?;
+    v.visit_reference_key(&reference_key, ctx)?;
     v.visit_reference_inner(reference_inner, ctx)?;
     v.visit_next(&cm.next, ctx)
 }
@@ -358,7 +358,7 @@ pub fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
 pub fn visit_const<V: Visitor>(v: &mut V, c: &Const, ctx: &Pil) -> Result<V::Error> {
     let (reference_key, reference_inner) = ctx.get_const_reference(c);
 
-    v.visit_reference_key(reference_key, ctx)?;
+    v.visit_reference_key(&reference_key, ctx)?;
     v.visit_reference_inner(reference_inner, ctx)?;
     v.visit_next(&c.next, ctx)
 }

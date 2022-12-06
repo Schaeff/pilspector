@@ -142,7 +142,7 @@ impl Visitor for SmtEncoder {
                     let (key, _) = ctx.get_const_reference(&w.inner);
                     RANGES
                         .iter()
-                        .find(|(k, _)| key == k)
+                        .find(|(k, _)| key == *k)
                         .unwrap_or_else(|| panic!("const {} does not have a known range", key))
                         .1
                 }

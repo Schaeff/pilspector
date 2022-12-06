@@ -38,8 +38,9 @@ impl Pil {
     pub fn get_cm_reference(
         &self,
         cm: &Cm,
-    ) -> (&ReferenceKey, &ReferenceInner<CommittedPolynomialId>) {
-        self.references
+    ) -> (ReferenceKey, &ReferenceInner<CommittedPolynomialId>) {
+        let (key, r) = self
+            .references
             .iter()
             .filter_map(|(key, r)| match r {
                 Reference::CmP(r) => (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0))
@@ -47,14 +48,22 @@ impl Pil {
                 _ => None,
             })
             .next()
-            .unwrap()
+            .unwrap();
+
+        let key = r
+            .len
+            .map(|_| format!("{}[{}]", key, cm.id.0 - r.id.0))
+            .unwrap_or(key.clone());
+
+        (key, r)
     }
 
     pub fn get_const_reference(
         &self,
         c: &Const,
-    ) -> (&ReferenceKey, &ReferenceInner<ConstantPolynomialId>) {
-        self.references
+    ) -> (ReferenceKey, &ReferenceInner<ConstantPolynomialId>) {
+        let (key, r) = self
+            .references
             .iter()
             .filter_map(|(key, r)| match r {
                 Reference::ConstP(r) => {
@@ -63,7 +72,14 @@ impl Pil {
                 _ => None,
             })
             .next()
-            .unwrap()
+            .unwrap();
+
+        let key = r
+            .len
+            .map(|_| format!("{}[{}]", key, c.id.0 - r.id.0))
+            .unwrap_or(key.clone());
+
+        (key, r)
     }
 }
 
