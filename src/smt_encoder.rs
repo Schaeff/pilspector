@@ -1,15 +1,12 @@
 use std::fmt;
 
 use crate::{
-    ast::{
-        ConnectionIdentity, Expression, PermutationIdentity, Pil, PlookupIdentity, PublicCell,
-        ReferenceKey,
-    },
+    ast::{ConnectionIdentity, Expression, PermutationIdentity, Pil, PlookupIdentity, PublicCell},
     visitor::*,
 };
 
 // known ranges
-const RANGES: [(&'static str, usize); 2] = [
+const RANGES: [(&str, usize); 2] = [
     ("Global.BYTE2", u16::MAX as usize),
     ("Global.BYTE", u8::MAX as usize),
 ];
@@ -39,10 +36,10 @@ impl<'a, 'b> Visitor for SmtEncoder<'a, 'b> {
 
         writeln!(self.f)?;
 
-        for (key, _) in &p.references {
+        for key in p.references.keys() {
             // ignore columns which are used in ranges
-            if RANGES.iter().find(|(k, _)| k == key).is_none() {
-                let key = key.clone().replace(".", "_");
+            if !RANGES.iter().any(|(k, _)| k == key) {
+                let key = key.clone().replace('.', "_");
                 writeln!(self.f, "(declare-const {} Int)", key)?;
             }
         }
@@ -66,7 +63,7 @@ impl<'a, 'b> Visitor for SmtEncoder<'a, 'b> {
         Ok(())
     }
 
-    fn visit_public_cell(&mut self, cell: &PublicCell, ctx: &Pil) -> Result<Self::Error> {
+    fn visit_public_cell(&mut self, _cell: &PublicCell, _ctx: &Pil) -> Result<Self::Error> {
         unimplemented!("declaration of public values is not supported")
     }
 
@@ -87,7 +84,7 @@ impl<'a, 'b> Visitor for SmtEncoder<'a, 'b> {
     }
 
     fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil) -> Result<Self::Error> {
-        if let Some(ref id) = i.sel_f {
+        if let Some(ref _id) = i.sel_f {
             unimplemented!();
         }
 
@@ -103,7 +100,7 @@ impl<'a, 'b> Visitor for SmtEncoder<'a, 'b> {
             }
         });
 
-        if let Some(ref id) = i.sel_t {
+        if let Some(ref _id) = i.sel_t {
             unimplemented!()
         }
 
@@ -116,7 +113,7 @@ impl<'a, 'b> Visitor for SmtEncoder<'a, 'b> {
                     RANGES
                         .iter()
                         .find(|(k, _)| key == k)
-                        .expect(&format!("const {} does not have a known range", key))
+                        .unwrap_or_else(|| panic!("const {} does not have a known range", key))
                         .1
                 }
                 _ => unimplemented!(),
@@ -124,7 +121,7 @@ impl<'a, 'b> Visitor for SmtEncoder<'a, 'b> {
         });
 
         for (key, max) in keys.zip(max) {
-            let key = key.clone().replace(".", "_");
+            let key = key.clone().replace('.', "_");
 
             writeln!(
                 self.f,
