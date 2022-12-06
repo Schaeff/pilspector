@@ -1,4 +1,4 @@
-mod ast;
+pub mod ast;
 mod displayer;
 mod validator;
 mod visitor;
