@@ -73,30 +73,35 @@ impl Visitor for PilDisplayer {
             writeln!(self.f, ";")?;
         }
 
-        for i in &p.pol_identities {
-            self.visit_polynomial_identity(i, ctx)?;
+        for (index, identity) in p.pol_identities.iter().enumerate() {
+            self.visit_polynomial_identity(identity, ctx, index)?;
             writeln!(self.f)?;
         }
 
-        for i in &p.plookup_identities {
-            self.visit_plookup_identity(i, ctx)?;
+        for (index, identity) in p.plookup_identities.iter().enumerate() {
+            self.visit_plookup_identity(identity, ctx, index)?;
             writeln!(self.f)?;
         }
 
-        for i in &p.permutation_identities {
-            self.visit_permutation_identity(i, ctx)?;
+        for (index, identity) in p.permutation_identities.iter().enumerate() {
+            self.visit_permutation_identity(identity, ctx, index)?;
             writeln!(self.f)?;
         }
 
-        for i in &p.connection_identities {
-            self.visit_connection_identity(i, ctx)?;
+        for (index, identity) in p.connection_identities.iter().enumerate() {
+            self.visit_connection_identity(identity, ctx, index)?;
             writeln!(self.f)?;
         }
 
         Ok(())
     }
 
-    fn visit_polynomial_identity(&mut self, i: &PolIdentity, ctx: &Pil) -> Result<Self::Error> {
+    fn visit_polynomial_identity(
+        &mut self,
+        i: &PolIdentity,
+        ctx: &Pil,
+        _: usize,
+    ) -> Result<Self::Error> {
         self.visit_expression(&ctx.expressions[i.e.0], ctx)?;
         write!(self.f, " == 0")
     }
@@ -109,7 +114,12 @@ impl Visitor for PilDisplayer {
         write!(self.f, "{}", c)
     }
 
-    fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil) -> Result<Self::Error> {
+    fn visit_plookup_identity(
+        &mut self,
+        i: &PlookupIdentity,
+        ctx: &Pil,
+        _: usize,
+    ) -> Result<Self::Error> {
         if let Some(ref id) = i.sel_f {
             self.visit_expression_id(id, ctx)?;
             write!(self.f, " * ")?;
@@ -147,6 +157,7 @@ impl Visitor for PilDisplayer {
         &mut self,
         i: &PermutationIdentity,
         ctx: &Pil,
+        _: usize,
     ) -> Result<Self::Error> {
         if let Some(ref id) = i.sel_f {
             self.visit_expression_id(id, ctx)?;
@@ -185,6 +196,7 @@ impl Visitor for PilDisplayer {
         &mut self,
         i: &ConnectionIdentity,
         ctx: &Pil,
+        _: usize,
     ) -> Result<Self::Error> {
         write!(self.f, "[ ")?;
 

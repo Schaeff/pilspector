@@ -51,7 +51,7 @@ impl Pil {
             .unwrap();
 
         let key = IndexedReferenceKey {
-            key,
+            key: key.clone(),
             index: r.len.map(|_| cm.id.0 - r.id.0),
         };
 
@@ -75,7 +75,7 @@ impl Pil {
             .unwrap();
 
         let key = IndexedReferenceKey {
-            key,
+            key: key.clone(),
             index: r.len.map(|_| c.id.0 - r.id.0),
         };
 
@@ -98,16 +98,66 @@ impl fmt::Display for Pil {
     }
 }
 
+pub trait ToStringWithContext {
+    fn to_string(&self, context: &Pil) -> String;
+}
+
+impl ToStringWithContext for PolIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer
+            .visit_polynomial_identity(self, context, 0)
+            .unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for PlookupIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer.visit_plookup_identity(self, context, 0).unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for PermutationIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer
+            .visit_permutation_identity(self, context, 0)
+            .unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for ConnectionIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer
+            .visit_connection_identity(self, context, 0)
+            .unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for Expression {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer.visit_expression(self, context).unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
 pub type PublicCellKey = String;
 pub type ReferenceKey = String;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IndexedReferenceKey<'a> {
-    pub key: &'a ReferenceKey,
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct IndexedReferenceKey {
+    pub key: ReferenceKey,
     pub index: Option<usize>,
 }
 
-impl<'a> fmt::Display for IndexedReferenceKey<'a> {
+impl fmt::Display for IndexedReferenceKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.key)?;
         if let Some(index) = self.index {
@@ -347,7 +397,7 @@ pub struct Public {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PolIdentity {
-    // expression id, by index in the expression list
+    // expression id, by index in the expression list, referring to the expression which must equal 0
     pub e: ExpressionId,
     #[serde(flatten)]
     pub location: Location,
@@ -357,9 +407,17 @@ pub struct PolIdentity {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PlookupIdentity {
+    /// What we are looking up
     pub f: Vec<ExpressionId>,
+    /// Where we are looking it up in
     pub t: Vec<ExpressionId>,
+    /// Selector for what we are looking up,
+    /// removes rows where this expresison is zero,
+    /// might alter the value if it is not one.
     pub sel_f: Option<ExpressionId>,
+    /// Selector for where we are looking it up in
+    /// removes rows where this expresison is zero,
+    /// might alter the value if it is not one.
     pub sel_t: Option<ExpressionId>,
     #[serde(flatten)]
     pub location: Location,
