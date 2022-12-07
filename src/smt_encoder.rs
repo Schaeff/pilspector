@@ -23,6 +23,7 @@ impl SmtPil {
 
 pub struct SmtEncoder {
     pub smt: Vec<SMTStatement>,
+    funs: Vec<SMTFunction>,
 }
 
 impl SmtEncoder {
@@ -35,6 +36,7 @@ impl fmt::Display for SmtPil {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut encoder = SmtEncoder {
             smt: Vec::default(),
+            funs: Vec::default(),
         };
         encoder.visit_pil(&self.pil)?;
 
@@ -87,17 +89,66 @@ impl Visitor for VariableCollector {
     }
 }
 
+// Some helpers.
+impl SmtEncoder {
+    fn key_to_smt_var(
+        &self,
+        key: &ReferenceKey,
+        next: bool,
+        suffix: Option<String>,
+    ) -> SMTVariable {
+        let mut key = key.clone().replace('.', "_");
+        if next {
+            key = format!("{}_next", key);
+        }
+        if suffix.is_some() {
+            key = format!("{}_{}", key, suffix.unwrap());
+        }
+        SMTVariable::new(key, SMTSort::Int)
+    }
+
+    fn constr_to_smt_function(&self, i: &PolIdentity, constr_idx: usize, ctx: &Pil) -> SMTFunction {
+        let mut collector = VariableCollector::new();
+        let constr = &ctx.expressions[i.e.0];
+        collector.visit_expression(constr, ctx).unwrap();
+        let smt_vars: Vec<_> = collector
+            .vars
+            .iter()
+            .map(|(key, next)| self.key_to_smt_var(key, *next, None))
+            .collect();
+        SMTFunction::new(format!("constr_{}", constr_idx), SMTSort::Bool, smt_vars)
+    }
+
+    fn all_vars_from_key(&self, key: &ReferenceKey) -> Vec<SMTVariable> {
+        [false, true]
+            .iter()
+            .flat_map(|next| {
+                (0..=2).map(|row| self.key_to_smt_var(key, *next, Some(format!("row{}", row))))
+            })
+            .collect()
+    }
+}
+
 impl Visitor for SmtEncoder {
     type Error = std::fmt::Error;
 
     fn visit_pil(&mut self, p: &Pil) -> Result<Self::Error> {
         let ctx = p;
 
+        // Here we declare all variables that are going to be used in the query.
+        // Those are, for every committed polynomial `pol`:
+        // - pol_row0
+        // - pol_next_row0
+        // - pol_row1
+        // - pol_next_row1
+        // - pol_row2
+        // - pol_next_row2
         for key in p.references.keys() {
             // ignore columns which are used in ranges
             if !RANGES.iter().any(|(k, _)| k == key) {
-                let key = key.clone().replace('.', "_");
-                self.out(declare_const(SMTVariable::new(key, SMTSort::Int)));
+                self.all_vars_from_key(key)
+                    .into_iter()
+                    .for_each(|var| self.out(declare_const(var)));
             }
         }
 
@@ -132,25 +183,10 @@ impl Visitor for SmtEncoder {
     ) -> Result<Self::Error> {
         let constr = &ctx.expressions[i.e.0];
         let expr = eq_zero(self.encode_expression(constr, ctx));
-        let mut collector = VariableCollector::new();
-        collector.visit_expression(constr, ctx).unwrap();
-        let smt_sorts: Vec<_> = collector
-            .vars
-            .iter()
-            .map(|(key, next)| {
-                let mut key = key.clone().replace('.', "_");
-                if *next {
-                    key = format!("{}_next", key);
-                }
-                SMTVariable::new(key, SMTSort::Int)
-            })
-            .collect();
-        let fun = define_fun(
-            SMTVariable::new(format!("constr_{}", idx), SMTSort::Bool),
-            smt_sorts,
-            expr,
-        );
-        self.out(fun);
+        let fun = self.constr_to_smt_function(i, idx, ctx);
+        self.funs.push(fun.clone());
+        let fun_def = define_fun(fun, expr);
+        self.out(fun_def);
         Ok(())
     }
 
@@ -218,10 +254,9 @@ impl Visitor for SmtEncoder {
         });
 
         for (key, max) in keys.zip(max) {
-            let key = key.clone().replace('.', "_");
-            let var = SMTVariable::new(key, SMTSort::Int);
-
-            self.out(assert(and(ge(var.clone(), 0), le(var, max as u64))));
+            self.all_vars_from_key(key)
+                .into_iter()
+                .for_each(|var| self.out(assert(and(ge(var.clone(), 0), le(var, max as u64)))));
         }
 
         Ok(())
@@ -275,8 +310,7 @@ impl SmtEncoder {
 
     fn encode_cm(&self, expr: &Cm, ctx: &Pil) -> SMTExpr {
         let (key, _) = ctx.get_cm_reference(expr);
-        let key = key.clone().replace('.', "_");
-        SMTVariable::new(key, SMTSort::Int).into()
+        self.key_to_smt_var(key, expr.next, None).into()
     }
 
     fn encode_number(&self, n: &Number) -> SMTExpr {
@@ -285,8 +319,7 @@ impl SmtEncoder {
 
     fn encode_const(&self, c: &Const, ctx: &Pil) -> SMTExpr {
         let (key, _) = ctx.get_const_reference(c);
-        let key = key.clone().replace('.', "_");
-        SMTVariable::new(key, SMTSort::Int).into()
+        self.key_to_smt_var(key, c.next, None).into()
     }
 }
 
