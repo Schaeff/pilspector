@@ -298,4 +298,15 @@ mod test {
 
         println!("{}", smt_pil);
     }
+
+    #[test]
+    #[ignore]
+    fn encode_arith() {
+        let pil_str = std::fs::read_to_string("arith.pil.json").unwrap();
+        let pil: Pil = serde_json::from_str(&pil_str).unwrap();
+
+        let smt_pil = SmtPil::new(pil);
+
+        println!("{}", smt_pil);
+    }
 }
