@@ -47,6 +47,13 @@ impl From<u64> for SMTExpr {
     }
 }
 
+pub fn signed_to_smt(input: i64) -> SMTExpr {
+    SMTExpr {
+        op: SMTOp::Literal(format!("{}", input), SMTSort::Int),
+        args: vec![],
+    }
+}
+
 impl From<SMTVariable> for SMTExpr {
     fn from(input: SMTVariable) -> SMTExpr {
         SMTExpr {

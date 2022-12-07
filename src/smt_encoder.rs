@@ -66,6 +66,69 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
             ]),
         ),
     );
+    // All the GL_SIGNED constants are built in the same way, with parameters
+    // from, to, steps:
+    // starts at "start", stays at a value for "steps" steps, then is incrementd by 1
+    // if it reaches "end", is reset to "start" (only after the steps, i.e. "end" is
+    // included in the range)
+    // formally:
+    // (r, v) => v == start + floor(r / steps) % (end + 1 - start)
+    fn range_constant(start: i64, end: i64, step: i64) -> SMTExpr {
+        let r = SMTVariable::new("r".to_string(), SMTSort::Int);
+        let v = SMTVariable::new("v".to_string(), SMTSort::Int);
+        let k = SMTVariable::new("k".to_string(), SMTSort::Int);
+        assert_eq!(
+            constant_lookup_function(String::new()).args,
+            vec![r.clone(), v.clone()]
+        );
+        assert!(end >= start);
+        let span = (end + 1 - start) as u64;
+        if step == 1 {
+            // v == start + r % span
+            // v >= start && v <= end && exists k: v == start + r + k * span
+            and_vec(vec![
+                ge(v.clone(), signed_to_smt(start)),
+                le(v.clone(), signed_to_smt(end)),
+                exists(
+                    k.clone(),
+                    eq(v.clone(), add(signed_to_smt(start), add(r, mul(k, span)))),
+                ),
+            ])
+        } else {
+            // v == start + floor(r / step) % span
+            // v >= start && v <= end && exists k: v == start + floor(r / step) + k * span
+            unimplemented!()
+        }
+    }
+    result.insert(
+        "Arith.GL_SIGNED_4BITS_C0".to_string(),
+        define_fun(
+            constant_lookup_function("Arith_GL_SIGNED_4BITS_C0".to_string()),
+            range_constant(-16, 16, 1),
+        ),
+    );
+    result.insert(
+        "Arith.GL_SIGNED_4BITS_C1".to_string(),
+        define_fun(
+            constant_lookup_function("Arith_GL_SIGNED_4BITS_C1".to_string()),
+            range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33
+        ),
+    );
+    result.insert(
+        "Arith.GL_SIGNED_4BITS_C2".to_string(),
+        define_fun(
+            constant_lookup_function("Arith_GL_SIGNED_4BITS_C2".to_string()),
+            range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33 * 33
+        ),
+    );
+    result.insert(
+        "Arith.GL_SIGNED_18BITS".to_string(),
+        define_fun(
+            constant_lookup_function("Arith_GL_SIGNED_18BITS".to_string()),
+            range_constant(-(1 << 18), 1 << 18, 1),
+        ),
+    );
+
     result
 }
 
