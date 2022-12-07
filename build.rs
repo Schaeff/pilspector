@@ -31,6 +31,4 @@ fn main() {
             println!("{:?}", out);
         }
     }
-
-    panic!()
 }
