@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::fmt;
+use std::{cell::Ref, collections::BTreeMap};
 
 use crate::{
     displayer::PilDisplayer,
@@ -80,6 +80,18 @@ impl Pil {
         };
 
         (key, r)
+    }
+
+    pub fn get_indexed_keys(&self, key: &ReferenceKey, ctx: &Pil) -> Vec<IndexedReferenceKey> {
+        let r = &ctx.references[key];
+        match r.len() {
+            // generate `n` keys for arrays of size `n`
+            Some(len) => (0..len)
+                .map(|index| IndexedReferenceKey::array_element(key, index))
+                .collect(),
+            // generate 1 key for non-array polynomials
+            None => vec![IndexedReferenceKey::basic(key)],
+        }
     }
 }
 
@@ -171,6 +183,14 @@ impl IndexedReferenceKey {
             index: Some(index),
         }
     }
+
+    pub fn index(&self) -> Option<usize> {
+        self.index.clone()
+    }
+
+    pub fn key(&self) -> &ReferenceKey {
+        &self.key
+    }
 }
 
 impl fmt::Display for IndexedReferenceKey {
@@ -191,7 +211,7 @@ pub struct ExpressionId(pub usize);
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
 pub struct CommittedPolynomialId(pub usize);
 // the index of a constant polynomial
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct ConstantPolynomialId(pub usize);
 // the index of a public value in the public list
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
@@ -238,6 +258,16 @@ pub enum Reference {
     CmP(ReferenceInner<CommittedPolynomialId>),
     ConstP(ReferenceInner<ConstantPolynomialId>),
     ImP(ReferenceInner<ExpressionId>),
+}
+
+impl Reference {
+    pub fn len(&self) -> Option<usize> {
+        match self {
+            Reference::CmP(r) => r.len,
+            Reference::ConstP(r) => r.len,
+            Reference::ImP(r) => r.len,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

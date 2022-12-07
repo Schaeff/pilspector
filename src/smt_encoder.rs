@@ -167,26 +167,9 @@ impl Visitor for SmtEncoder {
         // - pol_next_row2
         for key in p
             .references
-            .iter()
+            .keys()
             // go through all references and generate all polynomials, whether they are array elements or not
-            .map(|(key, reference)| {
-                (
-                    key,
-                    match reference {
-                        Reference::CmP(r) => r.len,
-                        Reference::ConstP(r) => r.len,
-                        Reference::ImP(r) => r.len,
-                    },
-                )
-            })
-            .flat_map(|(key, len)| match len {
-                // generate `n` keys for arrays of size `n`
-                Some(len) => (0..len)
-                    .map(|index| IndexedReferenceKey::array_element(key, index))
-                    .collect(),
-                // generate 1 key for non-array polynomials
-                None => vec![IndexedReferenceKey::basic(key)],
-            })
+            .flat_map(|key| ctx.get_indexed_keys(key, ctx))
         {
             // ignore columns which are used in ranges
             if !RANGES.iter().any(|(k, _)| {
