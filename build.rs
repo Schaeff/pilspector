@@ -20,7 +20,7 @@ fn main() {
 
             Command::new("node")
                 .args([
-                    "../pilcom/src/pil.js",
+                    "pilcom/src/pil.js",
                     entry.path().as_os_str().to_str().unwrap(),
                     "-o",
                     out_file.as_os_str().to_str().unwrap(),

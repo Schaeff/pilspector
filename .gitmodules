@@ -1,0 +1,3 @@
+[submodule "pilcom"]
+	path = pilcom
+	url = https://github.com/0xPolygonHermez/pilcom
