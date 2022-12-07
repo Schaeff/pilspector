@@ -267,20 +267,10 @@ impl Visitor for SmtEncoder {
             unimplemented!("Selectors for 'from' not implemented: {}", i.to_string(ctx));
         }
 
-        let keys = i.f.iter().map(|id| {
-            let e = &ctx.expressions[id.0];
-
-            match e {
-                Expression::Cm(w) => {
-                    let (key, _) = ctx.get_cm_reference(&w.inner);
-                    key
-                }
-                _ => unimplemented!(
-                    "Expression type not implemented for plookup identity: {}",
-                    e.to_string(ctx)
-                ),
-            }
-        });
+        let keys =
+            i.f.iter()
+                .map(|id| self.encode_expression(&ctx.expressions[id.0], ctx))
+                .collect::<Vec<_>>();
 
         if let Some(ref _id) = i.sel_t {
             unimplemented!("Selectors for 'to' not implemented: {}", i.to_string(ctx));
@@ -288,7 +278,6 @@ impl Visitor for SmtEncoder {
 
         let max = i.t.iter().map(|id| {
             let e = &ctx.expressions[id.0];
-
             match e {
                 Expression::Const(w) => {
                     let (key, _) = ctx.get_const_reference(&w.inner);
@@ -302,10 +291,8 @@ impl Visitor for SmtEncoder {
             }
         });
 
-        for (key, max) in keys.zip(max) {
-            self.all_vars_from_key(&key)
-                .into_iter()
-                .for_each(|var| self.out(assert(and(ge(var.clone(), 0), le(var, max as u64)))));
+        for (key, max) in keys.iter().zip(max) {
+            self.out(assert(and(ge(key.clone(), 0), le(key.clone(), max as u64))));
         }
 
         Ok(())
