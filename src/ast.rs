@@ -82,6 +82,56 @@ impl fmt::Display for Pil {
     }
 }
 
+pub trait ToStringWithContext {
+    fn to_string(&self, context: &Pil) -> String;
+}
+
+impl ToStringWithContext for PolIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer
+            .visit_polynomial_identity(self, context, 0)
+            .unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for PlookupIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer.visit_plookup_identity(self, context, 0).unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for PermutationIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer
+            .visit_permutation_identity(self, context, 0)
+            .unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for ConnectionIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer
+            .visit_connection_identity(self, context, 0)
+            .unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for Expression {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer.visit_expression(self, context).unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
 pub type PublicCellKey = String;
 pub type ReferenceKey = String;
 pub type References = BTreeMap<ReferenceKey, Reference>;
