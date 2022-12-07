@@ -91,7 +91,7 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
                 le(v.clone(), signed_to_smt(end)),
                 exists(
                     k.clone(),
-                    eq(v.clone(), add(signed_to_smt(start), add(r, mul(k, span)))),
+                    eq(v, add(signed_to_smt(start), add(r, mul(k, span)))),
                 ),
             ])
         } else {
@@ -466,24 +466,16 @@ impl Visitor for SmtEncoder {
 impl SmtEncoder {
     fn encode_expression(&self, e: &Expression, ctx: &Pil) -> SMTExpr {
         match e {
-            /*
-            Expression::Public(w) => {
-            encode_public(&w.inner)
-            }
-            Expression::Neg(w) => {
-            encode_neg(&w.inner)
-            }
-            Expression::Exp(w) => {
-            encode_exp(&w.inner)
-            }
-            */
+            Expression::Public(_w) => unimplemented!("public"),
+
+            Expression::Neg(w) => sub(0, self.encode_expression(&w.inner.values[0], ctx)),
+            Expression::Exp(_w) => unimplemented!("exp"),
             Expression::Add(w) => self.encode_add(&w.inner, ctx),
             Expression::Sub(w) => self.encode_sub(&w.inner, ctx),
             Expression::Mul(w) => self.encode_mul(&w.inner, ctx),
             Expression::Cm(w) => self.encode_cm(&w.inner, ctx),
             Expression::Number(w) => self.encode_number(&w.inner),
             Expression::Const(w) => self.encode_const(&w.inner, ctx),
-            _ => panic!(),
         }
     }
 
@@ -542,7 +534,7 @@ mod test {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "still needs 'exp'"]
     fn encode_arith() {
         let pil_str = std::fs::read_to_string("arith.pil.json").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
