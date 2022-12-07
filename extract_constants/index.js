@@ -21,19 +21,9 @@ const smPaddingKKBit = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_paddin
 const smPaddingPG = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_padding_pg.js");
 const smPoseidonG = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_poseidong.js");
 const smRom = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_rom.js");
-const smStorage = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_storage/sm_storage.js");
+// const smStorage = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_storage/sm_storage.js");
 
 const { F1Field } = require("ffjavascript");
-
-// const argv = require("yargs")
-//     .version(version)
-//     .usage("main_buildconstants -r <rom.json> -o <constant.bin|json> [-p <main.pil>] [-P <pilconfig.json>] [-v]")
-//     .alias("r", "rom")
-//     .alias("o", "output")
-//     .alias("p", "pil")
-//     .alias("P", "pilconfig")
-//     .alias("v", "verbose")
-//     .argv;
 
 async function run() {
 
@@ -56,7 +46,7 @@ async function run() {
     // }
     console.log('compile PIL '+pilFile);
 
-    const pilConfig = {};
+    const pilConfig = { defines: {N: 2 ** 21} };
 
     // if (argv.verbose) {
     //     pilConfig.verbose = true;
@@ -68,13 +58,10 @@ async function run() {
     Fr = new F1Field("0xFFFFFFFF00000001");
 
     // const rom = JSON.parse(await fs.promises.readFile(romFile, "utf8"));
-    const rom = { program: [] };
-
-    console.log("compile");
 
     const pil = await compile(Fr, pilFile, null, pilConfig);
 
-    console.log("compiled");
+    console.log(JSON.stringify(pil).length);
 
     const constPols = newConstantPolsArray(pil);
 
@@ -139,16 +126,22 @@ async function run() {
         console.log("PoseidonG...");
         await smPoseidonG.buildConstants(constPols.PoseidonG);
     }
-    if (constPols.Rom) {
-        console.log("Rom...");
-        await smRom.buildConstants(constPols.Rom, rom);
-    }
-    if (constPols.Storage) {
-        console.log("Storage...");
-        await smStorage.buildConstants(constPols.Storage);
-    }
 
-    let baseDir = "../constants_test";
+    // We are not looking at the Rom at this point
+
+    // if (constPols.Rom) {
+    //     console.log("Rom...");
+    //     await smRom.buildConstants(constPols.Rom, rom);
+    // }
+
+    // storage is ignored because it relies on testvectors. It could be moved back once it's in scope
+
+    // if (constPols.Storage) {
+    //     console.log("Storage...");
+    //     await smStorage.buildConstants(constPols.Storage);
+    // }
+
+    let baseDir = "../constants";
 
     var used = {}
 
@@ -162,7 +155,7 @@ async function run() {
         var fileName = fileName + "_" + used[fileName];
 
         // ignore the Rom state machine
-        if (!(fileName.startsWith("Rom"))) {
+        if (!(fileName.startsWith("Rom") || fileName.startsWith("Storage"))) {
 
             console.log("write ", fileName);
 

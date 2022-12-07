@@ -4,13 +4,14 @@
   "description": "Extract constants from zkevm-proverjs into individual files",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "extract": "node --max-old-space-size=8192 index.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@0xpolygonhermez/zkevm-proverjs": "../../zkevm-proverjs",
-    "ffjavascript": "^0.2.57",
-    "pilcom": "github:0xPolygonHermez/pilcom#a15fd19215431037bee1797ca9675dd9aafd8d8f"
+    "@0xpolygonhermez/zkevm-proverjs": "github:0xPolygonHermez/zkevm-proverjs#4092a3c6ade9e069f4e8f768f075c62a54d25e15",
+    "ffjavascript": "^0.2.55",
+    "pilcom": "^0.0.17"
   }
 }
