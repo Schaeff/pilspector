@@ -29,4 +29,6 @@ fn main() {
                 .expect("process failed to execute");
         }
     }
+
+    panic!()
 }
