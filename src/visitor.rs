@@ -67,28 +67,40 @@ pub trait Visitor: Sized {
         visit_pil(self, p)
     }
 
-    fn visit_polynomial_identity(&mut self, i: &PolIdentity, ctx: &Pil) -> Result<Self::Error> {
-        visit_polynomial_identity(self, i, ctx)
+    fn visit_polynomial_identity(
+        &mut self,
+        i: &PolIdentity,
+        ctx: &Pil,
+        index: usize,
+    ) -> Result<Self::Error> {
+        visit_polynomial_identity(self, i, ctx, index)
     }
 
-    fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil) -> Result<Self::Error> {
-        visit_plookup_identity(self, i, ctx)
+    fn visit_plookup_identity(
+        &mut self,
+        i: &PlookupIdentity,
+        ctx: &Pil,
+        index: usize,
+    ) -> Result<Self::Error> {
+        visit_plookup_identity(self, i, ctx, index)
     }
 
     fn visit_permutation_identity(
         &mut self,
         i: &PermutationIdentity,
         ctx: &Pil,
+        index: usize,
     ) -> Result<Self::Error> {
-        visit_permutation_identity(self, i, ctx)
+        visit_permutation_identity(self, i, ctx, index)
     }
 
     fn visit_connection_identity(
         &mut self,
         i: &ConnectionIdentity,
         ctx: &Pil,
+        index: usize,
     ) -> Result<Self::Error> {
-        visit_connection_identity(self, i, ctx)
+        visit_connection_identity(self, i, ctx, index)
     }
 
     fn visit_expression(&mut self, e: &Expression, ctx: &Pil) -> Result<Self::Error> {
@@ -180,20 +192,20 @@ pub fn visit_pil<V: Visitor>(v: &mut V, p: &Pil) -> Result<V::Error> {
         v.visit_reference(r, ctx)?;
     }
 
-    for i in &p.pol_identities {
-        v.visit_polynomial_identity(i, ctx)?;
+    for (index, identity) in p.pol_identities.iter().enumerate() {
+        v.visit_polynomial_identity(identity, ctx, index)?;
     }
 
-    for i in &p.plookup_identities {
-        v.visit_plookup_identity(i, ctx)?;
+    for (index, identity) in p.plookup_identities.iter().enumerate() {
+        v.visit_plookup_identity(identity, ctx, index)?;
     }
 
-    for i in &p.permutation_identities {
-        v.visit_permutation_identity(i, ctx)?;
+    for (index, identity) in p.permutation_identities.iter().enumerate() {
+        v.visit_permutation_identity(identity, ctx, index)?;
     }
 
-    for i in &p.connection_identities {
-        v.visit_connection_identity(i, ctx)?;
+    for (index, identity) in p.connection_identities.iter().enumerate() {
+        v.visit_connection_identity(identity, ctx, index)?;
     }
 
     Ok(())
@@ -203,6 +215,7 @@ pub fn visit_polynomial_identity<V: Visitor>(
     v: &mut V,
     i: &PolIdentity,
     ctx: &Pil,
+    _index: usize,
 ) -> Result<V::Error> {
     v.visit_expression(&ctx.expressions[i.e.0], ctx)
 }
@@ -211,6 +224,7 @@ pub fn visit_plookup_identity<V: Visitor>(
     v: &mut V,
     i: &PlookupIdentity,
     ctx: &Pil,
+    _index: usize,
 ) -> Result<V::Error> {
     if let Some(ref id) = i.sel_f {
         v.visit_expression_id(id, ctx)?;
@@ -234,6 +248,7 @@ pub fn visit_permutation_identity<V: Visitor>(
     v: &mut V,
     i: &PermutationIdentity,
     ctx: &Pil,
+    _index: usize,
 ) -> Result<V::Error> {
     if let Some(ref id) = i.sel_f {
         v.visit_expression_id(id, ctx)?;
@@ -257,6 +272,7 @@ pub fn visit_connection_identity<V: Visitor>(
     v: &mut V,
     i: &ConnectionIdentity,
     ctx: &Pil,
+    _index: usize,
 ) -> Result<V::Error> {
     for id in &i.pols {
         v.visit_expression_id(id, ctx)?;
