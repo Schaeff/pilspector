@@ -74,20 +74,20 @@ impl Visitor for SmtEncoder {
             }
         }
 
-        for i in &p.pol_identities {
-            self.visit_polynomial_identity(i, ctx)?;
+        for (index, identity) in p.pol_identities.iter().enumerate() {
+            self.visit_polynomial_identity(identity, ctx, index)?;
         }
 
-        for i in &p.plookup_identities {
-            self.visit_plookup_identity(i, ctx)?;
+        for (index, identity) in p.plookup_identities.iter().enumerate() {
+            self.visit_plookup_identity(identity, ctx, index)?;
         }
 
-        for i in &p.permutation_identities {
-            self.visit_permutation_identity(i, ctx)?;
+        for (index, identity) in p.permutation_identities.iter().enumerate() {
+            self.visit_permutation_identity(identity, ctx, index)?;
         }
 
-        for i in &p.connection_identities {
-            self.visit_connection_identity(i, ctx)?;
+        for (index, identity) in p.connection_identities.iter().enumerate() {
+            self.visit_connection_identity(identity, ctx, index)?;
         }
 
         Ok(())
@@ -101,6 +101,7 @@ impl Visitor for SmtEncoder {
         &mut self,
         i: &PolIdentity,
         ctx: &Pil,
+        _: usize,
     ) -> Result<Self::Error> {
         let constr = &ctx.expressions[i.e.0];
         let expr = eq_zero(self.encode_expression(constr, ctx));
@@ -113,6 +114,7 @@ impl Visitor for SmtEncoder {
         &mut self,
         i: &ConnectionIdentity,
         _: &Pil,
+        _: usize,
     ) -> Result<Self::Error> {
         unimplemented!("Found connection identity {:?} which is not supported", i);
     }
@@ -121,11 +123,12 @@ impl Visitor for SmtEncoder {
         &mut self,
         i: &PermutationIdentity,
         _: &Pil,
+        _: usize,
     ) -> Result<Self::Error> {
         unimplemented!("Found permutation identity {:?} which is not supported", i);
     }
 
-    fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil) -> Result<Self::Error> {
+    fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil, _:usize) -> Result<Self::Error> {
         if let Some(ref _id) = i.sel_f {
             unimplemented!();
         }

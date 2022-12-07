@@ -314,7 +314,7 @@ pub struct Public {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PolIdentity {
-    // expression id, by index in the expression list
+    // expression id, by index in the expression list, referring to the expression which must equal 0
     pub e: ExpressionId,
     #[serde(flatten)]
     pub location: Location,
