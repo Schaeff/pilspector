@@ -16,6 +16,19 @@ impl SMTVariable {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SMTFunction {
+    pub name: String,
+    pub sort: SMTSort,
+    pub args: Vec<SMTVariable>,
+}
+
+impl SMTFunction {
+    pub fn new(name: String, sort: SMTSort, args: Vec<SMTVariable>) -> Self {
+        SMTFunction { name, sort, args }
+    }
+}
+
 /// We keep the SMT expressions loose and runtime based for now.
 /// A potential future refactor may add compile time guarantees
 /// that illegal expressions cannot be built.
@@ -272,8 +285,8 @@ pub fn define_const(var: SMTVariable, val: SMTExpr) -> SMTStatement {
 }
 */
 
-pub fn define_fun(var: SMTVariable, vars: Vec<SMTVariable>, val: SMTExpr) -> SMTStatement {
-    SMTStatement::DefineFun(var, vars, val)
+pub fn define_fun(fun: SMTFunction, val: SMTExpr) -> SMTStatement {
+    SMTStatement::DefineFun(SMTVariable::new(fun.name, fun.sort), fun.args, val)
 }
 
 // Format stuff
