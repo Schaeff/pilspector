@@ -170,7 +170,12 @@ impl Visitor for SmtEncoder {
         unimplemented!("Found permutation identity {:?} which is not supported", i);
     }
 
-    fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil, _:usize) -> Result<Self::Error> {
+    fn visit_plookup_identity(
+        &mut self,
+        i: &PlookupIdentity,
+        ctx: &Pil,
+        _: usize,
+    ) -> Result<Self::Error> {
         if let Some(ref _id) = i.sel_f {
             unimplemented!();
         }

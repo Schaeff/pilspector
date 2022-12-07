@@ -89,12 +89,22 @@ impl Visitor for PilDisplayer {
         Ok(())
     }
 
-    fn visit_polynomial_identity(&mut self, i: &PolIdentity, ctx: &Pil, _: usize,) -> Result<Self::Error> {
+    fn visit_polynomial_identity(
+        &mut self,
+        i: &PolIdentity,
+        ctx: &Pil,
+        _: usize,
+    ) -> Result<Self::Error> {
         self.visit_expression(&ctx.expressions[i.e.0], ctx)?;
         write!(self.f, " == 0")
     }
 
-    fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil, _: usize,) -> Result<Self::Error> {
+    fn visit_plookup_identity(
+        &mut self,
+        i: &PlookupIdentity,
+        ctx: &Pil,
+        _: usize,
+    ) -> Result<Self::Error> {
         if let Some(ref id) = i.sel_f {
             self.visit_expression_id(id, ctx)?;
             write!(self.f, " * ")?;

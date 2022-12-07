@@ -67,11 +67,21 @@ pub trait Visitor: Sized {
         visit_pil(self, p)
     }
 
-    fn visit_polynomial_identity(&mut self, i: &PolIdentity, ctx: &Pil, index: usize) -> Result<Self::Error> {
+    fn visit_polynomial_identity(
+        &mut self,
+        i: &PolIdentity,
+        ctx: &Pil,
+        index: usize,
+    ) -> Result<Self::Error> {
         visit_polynomial_identity(self, i, ctx, index)
     }
 
-    fn visit_plookup_identity(&mut self, i: &PlookupIdentity, ctx: &Pil, index: usize) -> Result<Self::Error> {
+    fn visit_plookup_identity(
+        &mut self,
+        i: &PlookupIdentity,
+        ctx: &Pil,
+        index: usize,
+    ) -> Result<Self::Error> {
         visit_plookup_identity(self, i, ctx, index)
     }
 
