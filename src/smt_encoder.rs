@@ -62,7 +62,7 @@ impl fmt::Display for SmtPil {
 }
 
 struct VariableCollector {
-    vars: BTreeSet<(ReferenceKey, bool)>,
+    vars: BTreeSet<(IndexedReferenceKey, bool)>,
 }
 
 impl VariableCollector {
@@ -78,13 +78,13 @@ impl Visitor for VariableCollector {
 
     fn visit_cm(&mut self, cm: &Cm, ctx: &Pil) -> Result<Self::Error> {
         let (key, _) = ctx.get_cm_reference(cm);
-        self.vars.insert((key.clone(), cm.next));
+        self.vars.insert((key, cm.next));
         Ok(())
     }
 
     fn visit_const(&mut self, c: &Const, ctx: &Pil) -> Result<Self::Error> {
         let (key, _) = ctx.get_const_reference(c);
-        self.vars.insert((key.clone(), c.next));
+        self.vars.insert((key, c.next));
         Ok(())
     }
 }
@@ -93,11 +93,11 @@ impl Visitor for VariableCollector {
 impl SmtEncoder {
     fn key_to_smt_var(
         &self,
-        key: &ReferenceKey,
+        key: &IndexedReferenceKey,
         next: bool,
         suffix: Option<String>,
     ) -> SMTVariable {
-        let mut key = key.clone().replace('.', "_");
+        let mut key = key.to_string().replace(['.', '['], "_").replace(']', "");
         if next {
             key = format!("{}_next", key);
         }
@@ -119,7 +119,7 @@ impl SmtEncoder {
         SMTFunction::new(format!("constr_{}", constr_idx), SMTSort::Bool, smt_vars)
     }
 
-    fn all_vars_from_key(&self, key: &ReferenceKey) -> Vec<SMTVariable> {
+    fn all_vars_from_key(&self, key: &IndexedReferenceKey) -> Vec<SMTVariable> {
         [false, true]
             .iter()
             .flat_map(|next| {
@@ -143,10 +143,35 @@ impl Visitor for SmtEncoder {
         // - pol_next_row1
         // - pol_row2
         // - pol_next_row2
-        for key in p.references.keys() {
+        for key in p
+            .references
+            .iter()
+            // go through all references and generate all polynomials, whether they are array elements or not
+            .map(|(key, reference)| {
+                (
+                    key,
+                    match reference {
+                        Reference::CmP(r) => r.len,
+                        Reference::ConstP(r) => r.len,
+                        Reference::ImP(r) => r.len,
+                    },
+                )
+            })
+            .flat_map(|(key, len)| match len {
+                // generate `n` keys for arrays of size `n`
+                Some(len) => (0..len)
+                    .map(|index| IndexedReferenceKey::array_element(key, index))
+                    .collect(),
+                // generate 1 key for non-array polynomials
+                None => vec![IndexedReferenceKey::basic(key)],
+            })
+        {
             // ignore columns which are used in ranges
-            if !RANGES.iter().any(|(k, _)| k == key) {
-                self.all_vars_from_key(key)
+            if !RANGES.iter().any(|(k, _)| {
+                // the polynomials in RANGE are not arrays
+                IndexedReferenceKey::basic(&String::from(*k)) == key
+            }) {
+                self.all_vars_from_key(&key)
                     .into_iter()
                     .for_each(|var| self.out(declare_const(var)));
             }
@@ -245,7 +270,7 @@ impl Visitor for SmtEncoder {
                     let (key, _) = ctx.get_const_reference(&w.inner);
                     RANGES
                         .iter()
-                        .find(|(k, _)| key == k)
+                        .find(|(k, _)| key == IndexedReferenceKey::basic(&String::from(*k)))
                         .unwrap_or_else(|| panic!("const {} does not have a known range", key))
                         .1
                 }
@@ -254,7 +279,7 @@ impl Visitor for SmtEncoder {
         });
 
         for (key, max) in keys.zip(max) {
-            self.all_vars_from_key(key)
+            self.all_vars_from_key(&key)
                 .into_iter()
                 .for_each(|var| self.out(assert(and(ge(var.clone(), 0), le(var, max as u64)))));
         }
@@ -310,7 +335,7 @@ impl SmtEncoder {
 
     fn encode_cm(&self, expr: &Cm, ctx: &Pil) -> SMTExpr {
         let (key, _) = ctx.get_cm_reference(expr);
-        self.key_to_smt_var(key, expr.next, None).into()
+        self.key_to_smt_var(&key, expr.next, None).into()
     }
 
     fn encode_number(&self, n: &Number) -> SMTExpr {
@@ -319,7 +344,7 @@ impl SmtEncoder {
 
     fn encode_const(&self, c: &Const, ctx: &Pil) -> SMTExpr {
         let (key, _) = ctx.get_const_reference(c);
-        self.key_to_smt_var(key, c.next, None).into()
+        self.key_to_smt_var(&key, c.next, None).into()
     }
 }
 
