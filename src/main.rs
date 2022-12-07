@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 use pilspector::ast::Pil;
-use pilspector::smt_encoder::SmtPil;
+use pilspector::smt_encoder::{known_constants, SmtPil};
 
 #[derive(Debug, Parser)]
 #[clap(name = "Pilspector", version = env!("CARGO_PKG_VERSION"))]
@@ -39,7 +39,7 @@ fn main() {
         Subcommands::SMT(args) => {
             let pil_str = std::fs::read_to_string(args.input_file).unwrap();
             let pil: Pil = serde_json::from_str(&pil_str).unwrap();
-            let smt_pil = SmtPil::new(pil);
+            let smt_pil = SmtPil::new(pil, known_constants());
             println!("{}", smt_pil);
         }
     }

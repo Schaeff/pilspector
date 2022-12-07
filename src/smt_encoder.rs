@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
 
@@ -5,25 +6,89 @@ use crate::ast::*;
 use crate::smt::*;
 use crate::visitor::*;
 
-// known ranges
-const RANGES: [(&str, usize); 2] = [
-    ("Global.BYTE2", u16::MAX as usize),
-    ("Global.BYTE", u8::MAX as usize),
-];
+fn constant_lookup_function(name: String) -> SMTFunction {
+    let r = SMTVariable::new("r".to_string(), SMTSort::Int);
+    let v = SMTVariable::new("v".to_string(), SMTSort::Int);
+    SMTFunction::new(name, SMTSort::Bool, vec![r, v])
+}
+
+pub fn known_constants() -> BTreeMap<String, SMTStatement> {
+    let mut result = BTreeMap::new();
+    let r = SMTVariable::new("r".to_string(), SMTSort::Int);
+    let v = SMTVariable::new("v".to_string(), SMTSort::Int);
+    assert_eq!(
+        constant_lookup_function(String::new()).args,
+        vec![r.clone(), v.clone()]
+    );
+    result.insert(
+        "Global.BYTE2".to_string(),
+        define_fun(
+            constant_lookup_function("Global_BYTE2".to_string()),
+            and_vec(vec![
+                eq(r.clone(), v.clone()), // strictly, r % 2**16 = v - this is important if this is used together with another constant in the same lookup
+                ge(v.clone(), 0),
+                le(v.clone(), u16::MAX as u64),
+            ]),
+        ),
+    );
+    result.insert(
+        "Global.BYTE".to_string(),
+        define_fun(
+            constant_lookup_function("Global_BYTE".to_string()),
+            and_vec(vec![
+                eq(r.clone(), v.clone()), // strictly, r % 2**8 = v - this is important if this is used together with another constant in the same lookup
+                ge(v.clone(), 0),
+                le(v.clone(), u8::MAX as u64),
+            ]),
+        ),
+    );
+    result.insert(
+        "Arith.SEL_BYTE2_BIT19".to_string(),
+        define_fun(
+            constant_lookup_function("Arith_SEL_BYTE2_BIT19".to_string()),
+            ite(
+                le(r.clone(), u16::MAX as u64),
+                eq(v.clone(), 0),
+                eq(v.clone(), 1),
+            ),
+        ),
+    );
+    result.insert(
+        "Arith.BYTE2_BIT19".to_string(),
+        define_fun(
+            constant_lookup_function("Arith_BYTE2_BIT19".to_string()),
+            // definition is: v == r % (2**16 + 2**19)
+            // TODO This is not modeled below.
+            and_vec(vec![
+                eq(r, v.clone()),
+                ge(v.clone(), 0),
+                le(v, ((1 << 16) + (1 << 19)) - 1),
+            ]),
+        ),
+    );
+    result
+}
 
 pub struct SmtPil {
     pil: Pil,
+    /// Known constants. These can only be used in lookups.
+    /// The statement should be SMT functions of the form
+    /// (define-fun <constant name> ((row Int) (v Int)) Bool ...)
+    /// that return true if and only if the constant value in row `row`
+    /// is equal to `v`.
+    constants: BTreeMap<String, SMTStatement>,
 }
 
 impl SmtPil {
-    pub fn new(pil: Pil) -> Self {
-        Self { pil }
+    pub fn new(pil: Pil, constants: BTreeMap<String, SMTStatement>) -> Self {
+        Self { pil, constants }
     }
 }
 
 pub struct SmtEncoder {
     pub smt: Vec<SMTStatement>,
     funs: Vec<SMTFunction>,
+    constants: BTreeMap<String, SMTStatement>,
 }
 
 impl SmtEncoder {
@@ -37,7 +102,9 @@ impl fmt::Display for SmtPil {
         let mut encoder = SmtEncoder {
             smt: Vec::default(),
             funs: Vec::default(),
+            constants: self.constants.clone(),
         };
+        encoder.define_constants();
         encoder.visit_pil(&self.pil)?;
 
         writeln!(
@@ -89,6 +156,10 @@ impl Visitor for VariableCollector {
     }
 }
 
+fn escape_identifier(input: &str) -> String {
+    input.replace(['.', '['], "_").replace(']', "")
+}
+
 // Some helpers.
 impl SmtEncoder {
     fn key_to_smt_var(
@@ -97,7 +168,7 @@ impl SmtEncoder {
         next: bool,
         suffix: Option<String>,
     ) -> SMTVariable {
-        let mut key = key.to_string().replace(['.', '['], "_").replace(']', "");
+        let mut key = escape_identifier(&key.to_string());
         if next {
             key = format!("{}_next", key);
         }
@@ -126,6 +197,17 @@ impl SmtEncoder {
                 (0..=2).map(|row| self.key_to_smt_var(key, *next, Some(format!("row{}", row))))
             })
             .collect()
+    }
+
+    fn define_constants(&mut self) {
+        let constants = self
+            .constants
+            .iter()
+            .map(|(_name, fun)| fun.clone())
+            .collect::<Vec<_>>();
+        for c in constants {
+            self.out(c);
+        }
     }
 
     fn encode_state_machine(&self, p: &Pil) -> SMTStatement {
@@ -188,10 +270,11 @@ impl Visitor for SmtEncoder {
                 None => vec![IndexedReferenceKey::basic(key)],
             })
         {
-            // ignore columns which are used in ranges
-            if !RANGES.iter().any(|(k, _)| {
+            // ignore columns which are used in known constants,
+            // we already defined them in define_constants
+            if !self.constants.iter().any(|(name, _)| {
                 // the polynomials in RANGE are not arrays
-                IndexedReferenceKey::basic(&String::from(*k)) == key
+                IndexedReferenceKey::basic(name) == key
             }) {
                 self.all_vars_from_key(&key)
                     .into_iter()
@@ -261,39 +344,57 @@ impl Visitor for SmtEncoder {
         &mut self,
         i: &PlookupIdentity,
         ctx: &Pil,
-        _: usize,
+        idx: usize,
     ) -> Result<Self::Error> {
         if let Some(ref _id) = i.sel_f {
             unimplemented!("Selectors for 'from' not implemented: {}", i.to_string(ctx));
         }
-
-        let keys =
-            i.f.iter()
-                .map(|id| self.encode_expression(&ctx.expressions[id.0], ctx))
-                .collect::<Vec<_>>();
-
         if let Some(ref _id) = i.sel_t {
             unimplemented!("Selectors for 'to' not implemented: {}", i.to_string(ctx));
         }
 
-        let max = i.t.iter().map(|id| {
-            let e = &ctx.expressions[id.0];
-            match e {
-                Expression::Const(w) => {
-                    let (key, _) = ctx.get_const_reference(&w.inner);
-                    RANGES
-                        .iter()
-                        .find(|(k, _)| key == IndexedReferenceKey::basic(&String::from(*k)))
-                        .unwrap_or_else(|| panic!("const {} does not have a known range", key))
-                        .1
-                }
-                _ => unimplemented!(),
-            }
-        });
+        let row = SMTVariable::new("row".to_string(), SMTSort::Bool);
 
-        for (key, max) in keys.iter().zip(max) {
-            self.out(assert(and(ge(key.clone(), 0), le(key.clone(), max as u64))));
-        }
+        let mut collector = VariableCollector::new();
+        assert_eq!(i.f.len(), i.t.len());
+        let conditions = i
+            .f
+            .iter()
+            .zip(i.t.iter())
+            .map(|(key, lookup)| {
+                collector.visit_expression_id(key, ctx).unwrap();
+                let key = self.encode_expression_by_id(key, ctx);
+                let lookup = match &ctx.expressions[lookup.0] {
+                    Expression::Const(w) => {
+                        let (lookup, _) = ctx.get_const_reference(&w.inner);
+                        let lookup_name = self
+                            .constants
+                            .iter()
+                            .find(|(name, _)| lookup == IndexedReferenceKey::basic(name))
+                            .unwrap_or_else(|| panic!("const {} in plookup is not known", lookup))
+                            .0;
+                        escape_identifier(lookup_name)
+                    }
+                    _ => unimplemented!(),
+                };
+                uf(
+                    constant_lookup_function(lookup),
+                    vec![row.clone().into(), key],
+                )
+            })
+            .collect();
+
+        let parameters: Vec<_> = collector
+            .vars
+            .iter()
+            .map(|(key, next)| self.key_to_smt_var(key, *next, None))
+            .collect();
+        let lookup_function =
+            SMTFunction::new(format!("lookup_{}", idx), SMTSort::Bool, parameters);
+        self.funs.push(lookup_function.clone());
+
+        let fun_def = define_fun(lookup_function, exists(row, and_vec(conditions)));
+        self.out(fun_def);
 
         Ok(())
     }
@@ -321,6 +422,10 @@ impl SmtEncoder {
             Expression::Const(w) => self.encode_const(&w.inner, ctx),
             _ => panic!(),
         }
+    }
+
+    fn encode_expression_by_id(&self, id: &ExpressionId, ctx: &Pil) -> SMTExpr {
+        self.encode_expression(&ctx.expressions[id.0], ctx)
     }
 
     fn encode_add(&self, expr: &Add, ctx: &Pil) -> SMTExpr {
@@ -368,7 +473,7 @@ mod test {
         let pil_str = std::fs::read_to_string("byte4.pil.json").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
-        let smt_pil = SmtPil::new(pil);
+        let smt_pil = SmtPil::new(pil, known_constants());
 
         println!("{}", smt_pil);
     }
@@ -379,7 +484,7 @@ mod test {
         let pil_str = std::fs::read_to_string("arith.pil.json").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
-        let smt_pil = SmtPil::new(pil);
+        let smt_pil = SmtPil::new(pil, known_constants());
 
         println!("{}", smt_pil);
     }

@@ -81,6 +81,7 @@ pub enum SMTOp {
     Le,
     Gt,
     Ge,
+    Exists,
     Literal(String, SMTSort),
     Variable(SMTVariable),
     UF(SMTFunction), // TODO We should have a specialized SMTFunction
@@ -116,7 +117,7 @@ pub fn not<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
         args: vec![expr.into()],
     }
 }
-*/
+
 
 pub fn and<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
@@ -124,14 +125,15 @@ pub fn and<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
         args: vec![lhs.into(), rhs.into()],
     }
 }
+*/
 
-pub fn and_vec(args: Vec<SMTExpr>) -> SMTExpr {
+pub fn and_vec(args: Vec<impl Into<SMTExpr>>) -> SMTExpr {
     match args.len() {
         0 => literal_true(),
-        1 => args.into_iter().next().unwrap(),
+        1 => args.into_iter().next().unwrap().into(),
         _ => SMTExpr {
             op: SMTOp::And,
-            args,
+            args: args.into_iter().map(|a| a.into()).collect(),
         },
     }
 }
@@ -154,7 +156,7 @@ pub fn or_vec(args: Vec<SMTExpr>) -> SMTExpr {
         },
     }
 }
-
+*/
 pub fn ite<C: Into<SMTExpr>, T: Into<SMTExpr>, F: Into<SMTExpr>>(
     cond: C,
     true_term: T,
@@ -165,7 +167,7 @@ pub fn ite<C: Into<SMTExpr>, T: Into<SMTExpr>, F: Into<SMTExpr>>(
         args: vec![cond.into(), true_term.into(), false_term.into()],
     }
 }
-
+/*
 pub fn implies(premise: impl Into<SMTExpr>, conclusion: impl Into<SMTExpr>) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Implies,
@@ -173,6 +175,13 @@ pub fn implies(premise: impl Into<SMTExpr>, conclusion: impl Into<SMTExpr>) -> S
     }
 }
 */
+
+pub fn exists(var: SMTVariable, inner: SMTExpr) -> SMTExpr {
+    SMTExpr {
+        op: SMTOp::Exists,
+        args: vec![var.into(), inner],
+    }
+}
 
 pub fn add<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
@@ -266,10 +275,11 @@ pub fn literal_false() -> SMTExpr {
 */
 
 // SMT statement builders
-
+/*
 pub fn assert(expr: SMTExpr) -> SMTStatement {
     SMTStatement::Assert(expr)
 }
+*/
 
 pub fn declare_const(var: SMTVariable) -> SMTStatement {
     SMTStatement::DeclareConst(var)
@@ -373,6 +383,14 @@ impl SMTFormat for SMTExpr {
             SMTOp::Ge => {
                 assert!(self.args.len() == 2);
                 format!("(>= {} {})", self.args[0].as_smt(), self.args[1].as_smt())
+            }
+            SMTOp::Exists => {
+                assert!(self.args.len() == 2);
+                format!(
+                    "(exists ({}) {})",
+                    self.args[0].as_smt(),
+                    self.args[1].as_smt()
+                )
             }
             SMTOp::Literal(lit, sort) => match sort {
                 SMTSort::Bool => lit.to_string(),
