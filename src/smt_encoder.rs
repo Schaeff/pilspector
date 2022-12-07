@@ -163,11 +163,13 @@ impl Visitor for SmtEncoder {
 
 #[cfg(test)]
 mod test {
+    use crate::pil_json;
+
     use super::*;
 
     #[test]
     fn encode_byte4() {
-        let pil_str = std::fs::read_to_string("byte4.pil.json").unwrap();
+        let pil_str = pil_json("zkevm/byte4");
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
         let smt_pil = SmtPil::new(pil);

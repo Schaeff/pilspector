@@ -1,0 +1,5 @@
+namespace Multiplier(%N);
+    pol constant SET;
+    pol commit freeIn;
+    pol commit out;
+    out' = SET*freeIn + (1 - SET)*(out + freeIn);
