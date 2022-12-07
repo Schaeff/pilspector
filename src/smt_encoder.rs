@@ -90,7 +90,7 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
                 ge(v.clone(), signed_to_smt(start)),
                 le(v.clone(), signed_to_smt(end)),
                 exists(
-                    k.clone(),
+                    vec![k.clone()],
                     eq(v, add(signed_to_smt(start), add(r, mul(k, span)))),
                 ),
             ])
@@ -416,7 +416,7 @@ impl Visitor for SmtEncoder {
             unimplemented!("Selectors for 'to' not implemented: {}", i.to_string(ctx));
         }
 
-        let row = SMTVariable::new("row".to_string(), SMTSort::Bool);
+        let row = SMTVariable::new("row".to_string(), SMTSort::Int);
 
         let mut collector = VariableCollector::new();
         assert_eq!(i.f.len(), i.t.len());
@@ -456,7 +456,7 @@ impl Visitor for SmtEncoder {
             SMTFunction::new(format!("lookup_{}", idx), SMTSort::Bool, parameters);
         self.funs.push(lookup_function.clone());
 
-        let fun_def = define_fun(lookup_function, exists(row, and_vec(conditions)));
+        let fun_def = define_fun(lookup_function, exists(vec![row], and_vec(conditions)));
         self.out(fun_def);
 
         Ok(())
