@@ -18,7 +18,7 @@ fn main() {
                 .join(entry.path())
                 .with_extension("pil.json");
 
-            Command::new("node")
+            let out = Command::new("node")
                 .args([
                     "pilcom/src/pil.js",
                     entry.path().as_os_str().to_str().unwrap(),
@@ -27,6 +27,8 @@ fn main() {
                 ])
                 .output()
                 .expect("process failed to execute");
+
+            println!("{:?}", out);
         }
     }
 
