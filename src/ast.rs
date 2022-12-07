@@ -324,9 +324,17 @@ pub struct PolIdentity {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PlookupIdentity {
+    /// What we are looking up
     pub f: Vec<ExpressionId>,
+    /// Where we are looking it up in
     pub t: Vec<ExpressionId>,
+    /// Selector for what we are looking up,
+    /// removes rows where this expresison is zero,
+    /// might alter the value if it is not one.
     pub sel_f: Option<ExpressionId>,
+    /// Selector for where we are looking it up in
+    /// removes rows where this expresison is zero,
+    /// might alter the value if it is not one.
     pub sel_t: Option<ExpressionId>,
     #[serde(flatten)]
     pub location: Location,
