@@ -9,7 +9,7 @@
 
 - [x] Resolve `PolynomialId` references using `References` to get source information
 - [ ] Introduce a second AST which is easier to work with?
-- [ ] Basic queries: number of constraints for a given variable, etc
+- [x] Basic queries: number of constraints for a given variable, etc
 
 ## Caveats
 
