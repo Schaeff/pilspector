@@ -99,10 +99,6 @@ impl Visitor for SmtEncoder {
             }
         }
 
-        for (index, identity) in p.pol_identities.iter().enumerate() {
-            self.visit_polynomial_identity(identity, ctx, index)?;
-        }
-
         for (index, identity) in p.plookup_identities.iter().enumerate() {
             self.visit_plookup_identity(identity, ctx, index)?;
         }
@@ -113,6 +109,10 @@ impl Visitor for SmtEncoder {
 
         for (index, identity) in p.connection_identities.iter().enumerate() {
             self.visit_connection_identity(identity, ctx, index)?;
+        }
+
+        for (index, identity) in p.pol_identities.iter().enumerate() {
+            self.visit_polynomial_identity(identity, ctx, index)?;
         }
 
         Ok(())
@@ -126,7 +126,7 @@ impl Visitor for SmtEncoder {
         &mut self,
         i: &PolIdentity,
         ctx: &Pil,
-        _: usize,
+        idx: usize,
     ) -> Result<Self::Error> {
         let constr = &ctx.expressions[i.e.0];
         let expr = eq_zero(self.encode_expression(constr, ctx));
@@ -144,12 +144,12 @@ impl Visitor for SmtEncoder {
             })
             .collect();
         let fun = define_fun(
-            SMTVariable::new(format!("constr_{}", 1).to_string(), SMTSort::Bool),
+            SMTVariable::new(format!("constr_{}", idx).to_string(), SMTSort::Bool),
             smt_sorts,
             expr,
         );
-        println!("{}", fun.as_smt());
-        unimplemented!("Found polynomial identity {:?} which is not supported", i);
+        self.out(fun);
+        Ok(())
     }
 
     fn visit_connection_identity(
