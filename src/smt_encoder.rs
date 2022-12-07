@@ -79,7 +79,7 @@ impl Visitor for VariableCollector {
     }
 
     fn visit_const(&mut self, c: &Const, ctx: &Pil) -> Result<Self::Error> {
-        let (key, _) = ctx.get_const_reference(&c);
+        let (key, _) = ctx.get_const_reference(c);
         self.vars.insert((key.clone(), c.next));
         Ok(())
     }
@@ -144,7 +144,7 @@ impl Visitor for SmtEncoder {
             })
             .collect();
         let fun = define_fun(
-            SMTVariable::new(format!("constr_{}", idx).to_string(), SMTSort::Bool),
+            SMTVariable::new(format!("constr_{}", idx), SMTSort::Bool),
             smt_sorts,
             expr,
         );
@@ -279,7 +279,7 @@ impl SmtEncoder {
     }
 
     fn encode_const(&self, c: &Const, ctx: &Pil) -> SMTExpr {
-        let (key, _) = ctx.get_const_reference(&c);
+        let (key, _) = ctx.get_const_reference(c);
         let key = key.clone().replace('.', "_");
         SMTVariable::new(key, SMTSort::Int).into()
     }
