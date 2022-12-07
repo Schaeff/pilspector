@@ -83,7 +83,7 @@ pub enum SMTOp {
     Ge,
     Literal(String, SMTSort),
     Variable(SMTVariable),
-    UF(SMTVariable), // TODO We should have a specialized SMTFunction
+    UF(SMTFunction), // TODO We should have a specialized SMTFunction
 }
 
 // SMT expression builders
@@ -125,7 +125,6 @@ pub fn and<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
-/*
 pub fn and_vec(args: Vec<SMTExpr>) -> SMTExpr {
     match args.len() {
         0 => literal_true(),
@@ -137,6 +136,7 @@ pub fn and_vec(args: Vec<SMTExpr>) -> SMTExpr {
     }
 }
 
+/*
 pub fn or<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Or,
@@ -241,8 +241,7 @@ pub fn literal(lit: String, sort: SMTSort) -> SMTExpr {
     }
 }
 
-/*
-pub fn uf(function: SMTVariable, args: Vec<SMTExpr>) -> SMTExpr {
+pub fn uf(function: SMTFunction, args: Vec<SMTExpr>) -> SMTExpr {
     SMTExpr {
         op: SMTOp::UF(function),
         args,
@@ -260,6 +259,7 @@ pub fn literal_true() -> SMTExpr {
     literal_bool("true".to_string())
 }
 
+/*
 pub fn literal_false() -> SMTExpr {
     literal_bool("false".to_string())
 }

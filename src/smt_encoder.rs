@@ -127,6 +127,28 @@ impl SmtEncoder {
             })
             .collect()
     }
+
+    fn encode_state_machine(&self, p: &Pil) -> SMTStatement {
+        let mut collector = VariableCollector::new();
+        collector.visit_pil(p).unwrap();
+        let smt_vars: Vec<_> = collector
+            .vars
+            .iter()
+            .map(|(key, next)| self.key_to_smt_var(key, *next, None))
+            .collect();
+
+        let body = and_vec(
+            self.funs
+                .iter()
+                .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
+                .collect::<Vec<_>>(),
+        );
+
+        define_fun(
+            SMTFunction::new("state_machine".to_string(), SMTSort::Bool, smt_vars),
+            body,
+        )
+    }
 }
 
 impl Visitor for SmtEncoder {
@@ -192,6 +214,8 @@ impl Visitor for SmtEncoder {
         for (index, identity) in p.pol_identities.iter().enumerate() {
             self.visit_polynomial_identity(identity, ctx, index)?;
         }
+
+        self.out(self.encode_state_machine(p));
 
         Ok(())
     }
