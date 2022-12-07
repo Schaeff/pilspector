@@ -49,7 +49,7 @@ pub enum SMTStatement {
     DeclareConst(SMTVariable),
     DeclareFun(SMTVariable, Vec<SMTSort>),
     DefineConst(SMTVariable, SMTExpr),
-    DefineFun(SMTVariable, Vec<SMTSort>, SMTExpr),
+    DefineFun(SMTVariable, Vec<SMTVariable>, SMTExpr),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -272,8 +272,8 @@ pub fn define_const(var: SMTVariable, val: SMTExpr) -> SMTStatement {
 }
 */
 
-pub fn define_fun(var: SMTVariable, sorts: Vec<SMTSort>, val: SMTExpr) -> SMTStatement {
-    SMTStatement::DefineFun(var, sorts, val)
+pub fn define_fun(var: SMTVariable, vars: Vec<SMTVariable>, val: SMTExpr) -> SMTStatement {
+    SMTStatement::DefineFun(var, vars, val)
 }
 
 // Format stuff
@@ -394,10 +394,13 @@ impl SMTFormat for SMTStatement {
                 var.sort.as_smt(),
                 expr.as_smt()
             ),
-            SMTStatement::DefineFun(var, sorts, expr) => format!(
+            SMTStatement::DefineFun(var, vars, expr) => format!(
                 "(define-fun {} ({}) {} {})",
                 var.name,
-                sorts.as_smt(),
+                vars.iter()
+                    .map(|var| format!("({} {})", var.name, var.sort.as_smt()))
+                    .collect::<Vec<String>>()
+                    .join(" "),
                 var.sort.as_smt(),
                 expr.as_smt()
             ),
