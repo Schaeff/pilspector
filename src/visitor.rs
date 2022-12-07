@@ -388,11 +388,11 @@ pub fn visit_const<V: Visitor>(v: &mut V, c: &Const, ctx: &Pil) -> Result<V::Err
 }
 
 pub fn visit_indexed_reference_key<V: Visitor>(
-    v: &mut V,
-    k: &IndexedReferenceKey,
-    ctx: &Pil,
+    _: &mut V,
+    _: &IndexedReferenceKey,
+    _: &Pil,
 ) -> Result<V::Error> {
-    v.visit_reference_key(&k.key.clone(), ctx)
+    Ok(())
 }
 pub fn visit_expression_id<V: Visitor>(
     v: &mut V,

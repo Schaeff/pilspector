@@ -98,8 +98,7 @@ impl SmtEncoder {
         suffix: Option<String>,
     ) -> SMTVariable {
         let mut key = key.to_string()
-            .replace('.', "_")
-            .replace('[', "~")
+            .replace(['.', '['], "_")
             .replace(']', "");
         if next {
             key = format!("{}_next", key);
@@ -163,25 +162,16 @@ impl Visitor for SmtEncoder {
             .flat_map(|(key, len)| match len {
                 // generate `n` keys for arrays of size `n`
                 Some(len) => (0..len)
-                    .map(|index| IndexedReferenceKey {
-                        index: Some(index),
-                        key: key.clone(),
-                    })
+                    .map(|index| IndexedReferenceKey::array_element(key, index))
                     .collect(),
                 // generate 1 key for non-array polynomials
-                None => vec![IndexedReferenceKey {
-                    key: key.clone(),
-                    index: None,
-                }],
+                None => vec![IndexedReferenceKey::basic(key)],
             })
         {
             // ignore columns which are used in ranges
             if !RANGES.iter().any(|(k, _)| {
                 // the polynomials in RANGE are not arrays
-                IndexedReferenceKey {
-                    key: String::from(*k),
-                    index: None,
-                } == key
+                IndexedReferenceKey::basic(&String::from(*k)) == key
             }) {
                 self.all_vars_from_key(key)
                     .into_iter()
@@ -283,10 +273,7 @@ impl Visitor for SmtEncoder {
                     RANGES
                         .iter()
                         .find(|(k, _)| {
-                            key == IndexedReferenceKey {
-                                key: String::from(*k),
-                                index: None,
-                            }
+                            key == IndexedReferenceKey::basic(&String::from(*k))
                         })
                         .unwrap_or_else(|| panic!("const {} does not have a known range", key))
                         .1

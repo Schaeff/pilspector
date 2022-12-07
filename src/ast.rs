@@ -153,8 +153,24 @@ pub type ReferenceKey = String;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IndexedReferenceKey {
-    pub key: ReferenceKey,
-    pub index: Option<usize>,
+    key: ReferenceKey,
+    index: Option<usize>,
+}
+
+impl IndexedReferenceKey {
+    pub fn basic(key: &ReferenceKey) -> Self {
+        Self {
+            key: key.clone(),
+            index: None
+        }
+    }
+
+    pub fn array_element(key: &ReferenceKey, index: usize) -> Self {
+        Self {
+            key: key.clone(),
+            index: Some(index)
+        }
+    }
 }
 
 impl fmt::Display for IndexedReferenceKey {
