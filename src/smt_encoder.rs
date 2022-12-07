@@ -97,9 +97,7 @@ impl SmtEncoder {
         next: bool,
         suffix: Option<String>,
     ) -> SMTVariable {
-        let mut key = key.to_string()
-            .replace(['.', '['], "_")
-            .replace(']', "");
+        let mut key = key.to_string().replace(['.', '['], "_").replace(']', "");
         if next {
             key = format!("{}_next", key);
         }
@@ -115,17 +113,17 @@ impl SmtEncoder {
         collector.visit_expression(constr, ctx).unwrap();
         let smt_vars: Vec<_> = collector
             .vars
-            .into_iter()
-            .map(|(key, next)| self.key_to_smt_var(&key, next, None))
+            .iter()
+            .map(|(key, next)| self.key_to_smt_var(key, *next, None))
             .collect();
         SMTFunction::new(format!("constr_{}", constr_idx), SMTSort::Bool, smt_vars)
     }
 
-    fn all_vars_from_key(&self, key: IndexedReferenceKey) -> Vec<SMTVariable> {
+    fn all_vars_from_key(&self, key: &IndexedReferenceKey) -> Vec<SMTVariable> {
         [false, true]
             .iter()
             .flat_map(|next| {
-                (0..=2).map(|row| self.key_to_smt_var(&key, *next, Some(format!("row{}", row))))
+                (0..=2).map(|row| self.key_to_smt_var(key, *next, Some(format!("row{}", row))))
             })
             .collect()
     }
@@ -173,7 +171,7 @@ impl Visitor for SmtEncoder {
                 // the polynomials in RANGE are not arrays
                 IndexedReferenceKey::basic(&String::from(*k)) == key
             }) {
-                self.all_vars_from_key(key)
+                self.all_vars_from_key(&key)
                     .into_iter()
                     .for_each(|var| self.out(declare_const(var)));
             }
@@ -272,9 +270,7 @@ impl Visitor for SmtEncoder {
                     let (key, _) = ctx.get_const_reference(&w.inner);
                     RANGES
                         .iter()
-                        .find(|(k, _)| {
-                            key == IndexedReferenceKey::basic(&String::from(*k))
-                        })
+                        .find(|(k, _)| key == IndexedReferenceKey::basic(&String::from(*k)))
                         .unwrap_or_else(|| panic!("const {} does not have a known range", key))
                         .1
                 }
@@ -283,7 +279,7 @@ impl Visitor for SmtEncoder {
         });
 
         for (key, max) in keys.zip(max) {
-            self.all_vars_from_key(key)
+            self.all_vars_from_key(&key)
                 .into_iter()
                 .for_each(|var| self.out(assert(and(ge(var.clone(), 0), le(var, max as u64)))));
         }

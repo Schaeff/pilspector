@@ -161,14 +161,14 @@ impl IndexedReferenceKey {
     pub fn basic(key: &ReferenceKey) -> Self {
         Self {
             key: key.clone(),
-            index: None
+            index: None,
         }
     }
 
     pub fn array_element(key: &ReferenceKey, index: usize) -> Self {
         Self {
             key: key.clone(),
-            index: Some(index)
+            index: Some(index),
         }
     }
 }
