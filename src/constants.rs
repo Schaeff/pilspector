@@ -1,8 +1,6 @@
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf};
 
-use crate::ast::{
-    Const, ConstantPolynomialId, FieldElement, IndexedReferenceKey, Pil, ReferenceKey,
-};
+use crate::ast::{ConstantPolynomialId, FieldElement, IndexedReferenceKey, Pil, ReferenceKey};
 
 #[derive(Default, Debug)]
 struct Constants {
@@ -46,17 +44,17 @@ impl Constants {
 
 #[cfg(test)]
 mod test {
-
     use super::*;
 
     #[test]
+    #[ignore]
     fn load_main_constants() {
         let pil_str = std::fs::read_to_string("main.pil.json").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
         let mut constants = Constants::default();
 
-        for (key, _) in &pil.references {
+        for (key, _) in pil.references.iter() {
             constants.load(&key, &pil).unwrap();
         }
     }
