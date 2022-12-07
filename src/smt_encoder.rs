@@ -1,7 +1,9 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
-use crate::{ast::*, smt::*, visitor::*};
+use crate::ast::*;
+use crate::smt::*;
+use crate::visitor::*;
 
 // known ranges
 const RANGES: [(&str, usize); 2] = [
@@ -177,7 +179,7 @@ impl Visitor for SmtEncoder {
         _: usize,
     ) -> Result<Self::Error> {
         if let Some(ref _id) = i.sel_f {
-            unimplemented!();
+            unimplemented!("Selectors for 'from' not implemented: {}", i.to_string(ctx));
         }
 
         let keys = i.f.iter().map(|id| {
@@ -188,12 +190,15 @@ impl Visitor for SmtEncoder {
                     let (key, _) = ctx.get_cm_reference(&w.inner);
                     key
                 }
-                _ => unimplemented!(),
+                _ => unimplemented!(
+                    "Expression type not implemented for plookup identity: {}",
+                    e.to_string(ctx)
+                ),
             }
         });
 
         if let Some(ref _id) = i.sel_t {
-            unimplemented!()
+            unimplemented!("Selectors for 'to' not implemented: {}", i.to_string(ctx));
         }
 
         let max = i.t.iter().map(|id| {
