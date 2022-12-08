@@ -1,5 +1,5 @@
 pub mod ast;
-mod constants;
+// mod constants;
 mod displayer;
 mod smt;
 pub mod smt_encoder;

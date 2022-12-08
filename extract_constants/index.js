@@ -162,9 +162,10 @@ async function run() {
             const fd =await fs.promises.open(baseDir + "/" + fileName + ".json", "w+");
 
             // put all values into [0, p[
-            for(let i = 0; i < constPols.$$n; i++) {
-                constPols.$$array[column][i] = (constPols.$$array[column][i] < 0n) ? (constPols.$$array[column][i] + 0xffffffff00000001n) : constPols.$$array[column][i];
-            }
+            // disabled because we reason over integers for now
+            // for(let i = 0; i < constPols.$$n; i++) {
+            //     constPols.$$array[column][i] = (constPols.$$array[column][i] < 0n) ? (constPols.$$array[column][i] + 0xffffffff00000001n) : constPols.$$array[column][i];
+            // }
         
             await fd.write(JSON.stringify(constPols.$$array[column], (key, value) =>
             typeof value === 'bigint'
