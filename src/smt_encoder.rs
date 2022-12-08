@@ -163,6 +163,10 @@ impl SmtEncoder {
     fn out(&mut self, statement: SMTStatement) {
         self.smt.push(statement);
     }
+
+    fn out_vec(&mut self, statements: Vec<SMTStatement>) {
+        self.smt.extend(statements);
+    }
 }
 
 impl fmt::Display for SmtPil {
@@ -286,7 +290,49 @@ impl SmtEncoder {
         }
     }
 
-    fn encode_state_machine(&self, p: &Pil) -> SMTStatement {
+    fn encode_query(&self, p: &Pil, state_machine: &SMTFunction, rows: usize) -> Vec<SMTStatement> {
+        let mut decls: Vec<SMTVariable> = vec![];
+        let mut appls: Vec<SMTExpr> = vec![];
+
+        (0..rows).for_each(|row| {
+            (0..=1).for_each(|exec| {
+                let inner_decls: Vec<SMTVariable> = state_machine
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        SMTVariable::new(
+                            format!("{}_row{}_exec{}", arg.name, row, exec),
+                            arg.sort.clone(),
+                        )
+                    })
+                    .collect();
+                appls.push(uf(
+                    state_machine.clone(),
+                    inner_decls
+                        .clone()
+                        .into_iter()
+                        .map(|decl| decl.into())
+                        .collect(),
+                ));
+                decls.extend(inner_decls);
+            })
+        });
+
+        let mut statements: Vec<SMTStatement> =
+            decls.into_iter().map(|decl| declare_const(decl)).collect();
+        statements.push(assert(and_vec(appls)));
+
+        // TODO add equalities between out_r1 and out_next_r0
+        // TODO add equalities between in_r0_e0 and in_r0_e1
+        // TODO add query on final output variables
+        // TODO add row argument to state machine
+        // TODO add one row variable per row
+        // TODO add constraints row1 = row0 + 1 etc
+
+        statements
+    }
+
+    fn encode_state_machine(&self, p: &Pil) -> (SMTFunction, SMTExpr) {
         let mut const_collector = VariableCollector::new();
         self.funs.iter().for_each(|(_, constr)| {
             if let Constraint::Identity(i) = constr {
@@ -317,7 +363,7 @@ impl SmtEncoder {
                 .collect::<Vec<_>>(),
         );
 
-        define_fun(
+        (
             SMTFunction::new("state_machine".to_string(), SMTSort::Bool, smt_vars),
             body,
         )
@@ -329,32 +375,6 @@ impl Visitor for SmtEncoder {
 
     fn visit_pil(&mut self, p: &Pil) -> Result<Self::Error> {
         let ctx = p;
-
-        // Here we declare all variables that are going to be used in the query.
-        // Those are, for every committed polynomial `pol`:
-        // - pol_row0
-        // - pol_next_row0
-        // - pol_row1
-        // - pol_next_row1
-        // - pol_row2
-        // - pol_next_row2
-        for key in p
-            .references
-            .keys()
-            // go through all references and generate all polynomials, whether they are array elements or not
-            .flat_map(|key| ctx.get_indexed_keys(key, ctx))
-        {
-            // ignore columns which are used in known constants,
-            // we already defined them in define_constants
-            if !self.constants.iter().any(|(name, _)| {
-                // the polynomials in RANGE are not arrays
-                IndexedReferenceKey::basic(name) == key
-            }) {
-                self.all_vars_from_key(&key)
-                    .into_iter()
-                    .for_each(|var| self.out(declare_const(var)));
-            }
-        }
 
         for (index, identity) in p.plookup_identities.iter().enumerate() {
             self.visit_plookup_identity(identity, ctx, index)?;
@@ -372,7 +392,11 @@ impl Visitor for SmtEncoder {
             self.visit_polynomial_identity(identity, ctx, index)?;
         }
 
-        self.out(self.encode_state_machine(p));
+        let (state_function, body) = self.encode_state_machine(p);
+        self.out(define_fun(state_function.clone(), body));
+
+        let query = self.encode_query(p, &state_function, 3);
+        self.out_vec(query.clone());
 
         Ok(())
     }

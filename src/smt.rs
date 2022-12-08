@@ -282,11 +282,9 @@ pub fn literal_false() -> SMTExpr {
 */
 
 // SMT statement builders
-/*
 pub fn assert(expr: SMTExpr) -> SMTStatement {
     SMTStatement::Assert(expr)
 }
-*/
 
 pub fn declare_const(var: SMTVariable) -> SMTStatement {
     SMTStatement::DeclareConst(var)
