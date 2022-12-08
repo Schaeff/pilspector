@@ -1,3 +1,5 @@
+use ast::Pil;
+
 pub mod ast;
 // mod constants;
 mod displayer;
@@ -7,8 +9,7 @@ mod validator;
 mod visitor;
 
 /// compile a file with pilcom
-#[cfg(test)]
-pub(crate) fn pilcom(f: &str) -> String {
+pub(crate) fn pilcom(f: &str) -> Result<String, String> {
     use std::{path::PathBuf, process::Command};
 
     let f = PathBuf::from(f);
@@ -18,7 +19,7 @@ pub(crate) fn pilcom(f: &str) -> String {
 
     let out_file = dir.path().join(f.clone()).with_extension("pil.json");
 
-    let _ = Command::new("node")
+    Command::new("node")
         .args([
             "pilcom/src/pil.js",
             f.as_os_str().to_str().unwrap(),
@@ -26,9 +27,26 @@ pub(crate) fn pilcom(f: &str) -> String {
             out_file.as_os_str().to_str().unwrap(),
         ])
         .output()
-        .expect("process failed to execute");
+        .map_err(|err| format!("Could not run pilcom: {}", err))?;
 
-    std::fs::read_to_string(out_file).expect("compilation failed")
+    std::fs::read_to_string(out_file).map_err(|_| "pilcom compilation failed".into())
+}
+
+/// Attempt to load either PIL JSON description, or the PIL file transparently.
+pub fn load_pil(filename: &str) -> Pil {
+    // First try to parse as a JSON
+    let json_str = std::fs::read_to_string(filename).unwrap();
+    serde_json::from_str(&json_str)
+        .or_else(|json_err| -> Result<Pil, (_, String)> {
+            // Parsing as JSON failed, parse as PIL
+            let json_str = pilcom(filename).map_err(
+                // Both parsings failed, return both errors
+                |pil_err| (json_err, pil_err),
+            )?;
+            // This time should not fail
+            Ok(serde_json::from_str(&json_str).unwrap())
+        })
+        .unwrap()
 }
 
 #[cfg(test)]
@@ -38,28 +56,28 @@ mod test {
 
     #[test]
     fn parse_main() {
-        let pil_str = pilcom("pil/zkevm/main.pil");
+        let pil_str = pilcom("pil/zkevm/main.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
         pil.validate().unwrap();
     }
 
     #[test]
     fn display_adder() {
-        let pil_str = pilcom("pil/adder.pil");
+        let pil_str = pilcom("pil/adder.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
         println!("{}", pil);
     }
 
     #[test]
     fn display_main() {
-        let pil_str = pilcom("pil/zkevm/main.pil");
+        let pil_str = pilcom("pil/zkevm/main.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
         println!("{}", pil);
     }
 
     #[test]
     fn display_arrays() {
-        let pil_str = pilcom("pil/arrays.pil");
+        let pil_str = pilcom("pil/arrays.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
         assert_eq!(&pil.to_string(), "pol commit Array.x[2];\npol constant Array.y[2];\n((Array.x[0] * Array.y[1]) - (Array.x[1] * Array.y[0])) == 0\n");
     }
