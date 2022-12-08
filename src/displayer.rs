@@ -248,11 +248,4 @@ impl Visitor for PilDisplayer {
     fn visit_number(&mut self, c: &Number, _ctx: &Pil) -> Result<Self::Error> {
         write!(self.f, "{}", c.value)
     }
-
-    fn visit_next(&mut self, next: &bool, _ctx: &Pil) -> Result<Self::Error> {
-        if *next {
-            write!(self.f, "'")?;
-        }
-        Ok(())
-    }
 }

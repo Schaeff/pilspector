@@ -155,10 +155,6 @@ pub trait Visitor: Sized {
         visit_number(self, c, ctx)
     }
 
-    fn visit_next(&mut self, next: &bool, ctx: &Pil) -> Result<Self::Error> {
-        visit_next(self, next, ctx)
-    }
-
     fn visit_name(&mut self, c: &Name, ctx: &Pil) -> Result<Self::Error> {
         visit_reference_key(self, c, ctx)
     }
@@ -366,22 +362,19 @@ pub fn visit_neg<V: Visitor>(v: &mut V, values: &Neg, ctx: &Pil) -> Result<V::Er
 pub fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
     let pol = cm.to_polynomial(ctx);
 
-    v.visit_polynomial(&pol, ctx)?;
-    v.visit_next(&cm.next, ctx)
+    v.visit_polynomial(&pol, ctx)
 }
 
 pub fn visit_exp<V: Visitor>(v: &mut V, exp: &Exp, ctx: &Pil) -> Result<V::Error> {
     let pol = exp.to_polynomial(ctx);
 
-    v.visit_polynomial(&pol, ctx)?;
-    v.visit_next(&exp.next, ctx)
+    v.visit_polynomial(&pol, ctx)
 }
 
 pub fn visit_const<V: Visitor>(v: &mut V, c: &Const, ctx: &Pil) -> Result<V::Error> {
     let pol = c.to_polynomial(ctx);
 
-    v.visit_polynomial(&pol, ctx)?;
-    v.visit_next(&c.next, ctx)
+    v.visit_polynomial(&pol, ctx)
 }
 
 pub fn visit_polynomial<V: Visitor>(_: &mut V, _: &Polynomial, _: &Pil) -> Result<V::Error> {
@@ -396,10 +389,6 @@ pub fn visit_expression_id<V: Visitor>(
 }
 
 pub fn visit_number<V: Visitor>(_v: &mut V, _c: &Number, _ctx: &Pil) -> Result<V::Error> {
-    Ok(())
-}
-
-pub fn visit_next<V: Visitor>(_v: &mut V, _c: &bool, _ctx: &Pil) -> Result<V::Error> {
     Ok(())
 }
 
