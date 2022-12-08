@@ -131,10 +131,6 @@ pub trait Visitor: Sized {
         visit_mul(self, values, ctx)
     }
 
-    fn visit_exp(&mut self, exp: &Exp, ctx: &Pil) -> Result<Self::Error> {
-        visit_exp(self, exp, ctx)
-    }
-
     fn visit_public(&mut self, public: &Public, ctx: &Pil) -> Result<Self::Error> {
         visit_public(self, public, ctx)
     }
@@ -145,6 +141,10 @@ pub trait Visitor: Sized {
 
     fn visit_cm(&mut self, cm: &Cm, ctx: &Pil) -> Result<Self::Error> {
         visit_cm(self, cm, ctx)
+    }
+
+    fn visit_exp(&mut self, exp: &Exp, ctx: &Pil) -> Result<Self::Error> {
+        visit_exp(self, exp, ctx)
     }
 
     fn visit_const(&mut self, c: &Const, ctx: &Pil) -> Result<Self::Error> {
@@ -356,10 +356,6 @@ pub fn visit_mul<V: Visitor>(v: &mut V, mul: &Mul, ctx: &Pil) -> Result<V::Error
     Ok(())
 }
 
-pub fn visit_exp<V: Visitor>(v: &mut V, exp: &Exp, ctx: &Pil) -> Result<V::Error> {
-    v.visit_expression(&ctx.expressions[exp.id.0], ctx)
-}
-
 pub fn visit_public<V: Visitor>(v: &mut V, public: &Public, ctx: &Pil) -> Result<V::Error> {
     v.visit_public_cell(&ctx.publics[public.id.0], ctx)
 }
@@ -377,6 +373,14 @@ pub fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
     v.visit_indexed_reference_key(&indexed_reference_key, ctx)?;
     v.visit_reference_inner(reference_inner, ctx)?;
     v.visit_next(&cm.next, ctx)
+}
+
+pub fn visit_exp<V: Visitor>(v: &mut V, exp: &Exp, ctx: &Pil) -> Result<V::Error> {
+    let (indexed_reference_key, reference_inner) = ctx.get_exp_reference(exp);
+
+    v.visit_indexed_reference_key(&indexed_reference_key, ctx)?;
+    v.visit_reference_inner(reference_inner, ctx)?;
+    v.visit_next(&exp.next, ctx)
 }
 
 pub fn visit_const<V: Visitor>(v: &mut V, c: &Const, ctx: &Pil) -> Result<V::Error> {

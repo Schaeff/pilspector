@@ -212,6 +212,12 @@ impl Visitor for VariableCollector {
         Ok(())
     }
 
+    fn visit_exp(&mut self, exp: &Exp, ctx: &Pil) -> Result<Self::Error> {
+        let (key, _) = ctx.get_exp_reference(exp);
+        self.vars.insert((key, exp.next));
+        Ok(())
+    }
+
     fn visit_const(&mut self, c: &Const, ctx: &Pil) -> Result<Self::Error> {
         let (key, _) = ctx.get_const_reference(c);
         self.vars.insert((key, c.next));
@@ -474,6 +480,7 @@ impl SmtEncoder {
             Expression::Sub(w) => self.encode_sub(&w.inner, ctx),
             Expression::Mul(w) => self.encode_mul(&w.inner, ctx),
             Expression::Cm(w) => self.encode_cm(&w.inner, ctx),
+            Expression::Exp(w) => self.encode_exp(&w.inner, ctx),
             Expression::Number(w) => self.encode_number(&w.inner),
             Expression::Const(w) => self.encode_const(&w.inner, ctx),
         }
@@ -507,6 +514,11 @@ impl SmtEncoder {
     fn encode_cm(&self, expr: &Cm, ctx: &Pil) -> SMTExpr {
         let (key, _) = ctx.get_cm_reference(expr);
         self.key_to_smt_var(&key, expr.next, None).into()
+    }
+
+    fn encode_exp(&self, exp: &Exp, ctx: &Pil) -> SMTExpr {
+        let (key, _) = ctx.get_exp_reference(exp);
+        self.key_to_smt_var(&key, exp.next, None).into()
     }
 
     fn encode_number(&self, n: &Number) -> SMTExpr {
