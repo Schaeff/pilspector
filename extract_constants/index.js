@@ -61,8 +61,6 @@ async function run() {
 
     const pil = await compile(Fr, pilFile, null, pilConfig);
 
-    console.log(JSON.stringify(pil).length);
-
     const constPols = newConstantPolsArray(pil);
 
     // BREAK HERE TO DETECT N
@@ -162,6 +160,11 @@ async function run() {
             fileName = fileName.replace(".", "_");
     
             const fd =await fs.promises.open(baseDir + "/" + fileName + ".json", "w+");
+
+            // put all values into [0, p[
+            for(let i = 0; i < constPols.$$n; i++) {
+                constPols.$$array[column][i] = (constPols.$$array[column][i] < 0n) ? (constPols.$$array[column][i] + 0xffffffff00000001n) : constPols.$$array[column][i];
+            }
         
             await fd.write(JSON.stringify(constPols.$$array[column], (key, value) =>
             typeof value === 'bigint'
