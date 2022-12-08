@@ -192,7 +192,7 @@ impl fmt::Display for SmtPil {
 }
 
 struct VariableCollector {
-    vars: BTreeSet<(IndexedReferenceKey, bool)>,
+    vars: BTreeSet<Polynomial>,
 }
 
 impl VariableCollector {
@@ -207,40 +207,35 @@ impl Visitor for VariableCollector {
     type Error = ();
 
     fn visit_cm(&mut self, cm: &Cm, ctx: &Pil) -> Result<Self::Error> {
-        let (key, _) = ctx.get_cm_reference(cm);
-        self.vars.insert((key, cm.next));
+        let pol = cm.to_polynomial(ctx);
+        self.vars.insert(pol);
         Ok(())
     }
 
     fn visit_exp(&mut self, exp: &Exp, ctx: &Pil) -> Result<Self::Error> {
-        let (key, _) = ctx.get_exp_reference(exp);
-        self.vars.insert((key, exp.next));
+        let pol = exp.to_polynomial(ctx);
+        self.vars.insert(pol);
         Ok(())
     }
 
     fn visit_const(&mut self, c: &Const, ctx: &Pil) -> Result<Self::Error> {
-        let (key, _) = ctx.get_const_reference(c);
-        self.vars.insert((key, c.next));
+        let pol = c.to_polynomial(ctx);
+        self.vars.insert(pol);
         Ok(())
     }
 }
 
 fn escape_identifier(input: &str) -> String {
-    input.replace(['.', '['], "_").replace(']', "")
+    input
+        .replace(['.', '['], "_")
+        .replace(']', "")
+        .replace('\'', "_next")
 }
 
 // Some helpers.
 impl SmtEncoder {
-    fn key_to_smt_var(
-        &self,
-        key: &IndexedReferenceKey,
-        next: bool,
-        suffix: Option<String>,
-    ) -> SMTVariable {
-        let mut key = escape_identifier(&key.to_string());
-        if next {
-            key = format!("{}_next", key);
-        }
+    fn pol_to_smt_var(&self, pol: &Polynomial, suffix: Option<String>) -> SMTVariable {
+        let mut key = escape_identifier(&pol.to_string());
         if suffix.is_some() {
             key = format!("{}_{}", key, suffix.unwrap());
         }
@@ -254,17 +249,14 @@ impl SmtEncoder {
         let smt_vars: Vec<_> = collector
             .vars
             .iter()
-            .map(|(key, next)| self.key_to_smt_var(key, *next, None))
+            .map(|pol| self.pol_to_smt_var(pol, None))
             .collect();
         SMTFunction::new(format!("constr_{}", constr_idx), SMTSort::Bool, smt_vars)
     }
 
-    fn all_vars_from_key(&self, key: &IndexedReferenceKey) -> Vec<SMTVariable> {
-        [false, true]
-            .iter()
-            .flat_map(|next| {
-                (0..=2).map(|row| self.key_to_smt_var(key, *next, Some(format!("row{}", row))))
-            })
+    fn all_vars_from_pol(&self, pol: &Polynomial) -> Vec<SMTVariable> {
+        (0..=2)
+            .map(|row| self.pol_to_smt_var(pol, Some(format!("row{}", row))))
             .collect()
     }
 
@@ -285,7 +277,7 @@ impl SmtEncoder {
         let smt_vars: Vec<_> = collector
             .vars
             .iter()
-            .map(|(key, next)| self.key_to_smt_var(key, *next, None))
+            .map(|pol| self.pol_to_smt_var(pol, None))
             .collect();
 
         let body = and_vec(
@@ -316,19 +308,18 @@ impl Visitor for SmtEncoder {
         // - pol_next_row1
         // - pol_row2
         // - pol_next_row2
-        for key in p
+        for pol in p
             .references
-            .keys()
-            // go through all references and generate all polynomials, whether they are array elements or not
-            .flat_map(|key| ctx.get_indexed_keys(key, ctx))
+            .iter()
+            .flat_map(|(name, _)| ctx.get_polynomials(name))
         {
             // ignore columns which are used in known constants,
             // we already defined them in define_constants
             if !self.constants.iter().any(|(name, _)| {
                 // the polynomials in RANGE are not arrays
-                IndexedReferenceKey::basic(name) == key
+                Polynomial::basic(name, false) == pol
             }) {
-                self.all_vars_from_key(&key)
+                self.all_vars_from_pol(&pol)
                     .into_iter()
                     .for_each(|var| self.out(declare_const(var)));
             }
@@ -418,11 +409,11 @@ impl Visitor for SmtEncoder {
                 let key = self.encode_expression_by_id(key, ctx);
                 let lookup = match &ctx.expressions[lookup.0] {
                     Expression::Const(w) => {
-                        let (lookup, _) = ctx.get_const_reference(&w.inner);
+                        let lookup = w.inner.to_polynomial(ctx);
                         let lookup_name = self
                             .constants
                             .iter()
-                            .find(|(name, _)| lookup == IndexedReferenceKey::basic(name))
+                            .find(|(name, _)| lookup == Polynomial::basic(name, false))
                             .unwrap_or_else(|| panic!("const {} in plookup is not known", lookup))
                             .0;
                         escape_identifier(lookup_name)
@@ -439,7 +430,7 @@ impl Visitor for SmtEncoder {
         let parameters: Vec<_> = collector
             .vars
             .iter()
-            .map(|(key, next)| self.key_to_smt_var(key, *next, None))
+            .map(|pol| self.pol_to_smt_var(pol, None))
             .collect();
         let lookup_function =
             SMTFunction::new(format!("lookup_{}", idx), SMTSort::Bool, parameters);
@@ -494,13 +485,13 @@ impl SmtEncoder {
     }
 
     fn encode_cm(&self, expr: &Cm, ctx: &Pil) -> SMTExpr {
-        let (key, _) = ctx.get_cm_reference(expr);
-        self.key_to_smt_var(&key, expr.next, None).into()
+        let pol = expr.to_polynomial(ctx);
+        self.pol_to_smt_var(&pol, None).into()
     }
 
-    fn encode_exp(&self, exp: &Exp, ctx: &Pil) -> SMTExpr {
-        let (key, _) = ctx.get_exp_reference(exp);
-        self.key_to_smt_var(&key, exp.next, None).into()
+    fn encode_exp(&self, expr: &Exp, ctx: &Pil) -> SMTExpr {
+        let pol = expr.to_polynomial(ctx);
+        self.pol_to_smt_var(&pol, None).into()
     }
 
     fn encode_number(&self, n: &Number) -> SMTExpr {
@@ -508,8 +499,8 @@ impl SmtEncoder {
     }
 
     fn encode_const(&self, c: &Const, ctx: &Pil) -> SMTExpr {
-        let (key, _) = ctx.get_const_reference(c);
-        self.key_to_smt_var(&key, c.next, None).into()
+        let pol = c.to_polynomial(ctx);
+        self.pol_to_smt_var(&pol, None).into()
     }
 }
 
