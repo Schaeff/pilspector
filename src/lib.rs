@@ -27,7 +27,7 @@ pub(crate) fn pilcom(f: &str) -> String {
         .output()
         .expect("process failed to execute");
 
-    std::fs::read_to_string(out_file).unwrap()
+    std::fs::read_to_string(out_file).expect("compilation failed")
 }
 
 #[cfg(test)]
@@ -58,7 +58,7 @@ mod test {
 
     #[test]
     fn display_arrays() {
-        let pil_str = std::fs::read_to_string("arrays.pil.json").unwrap();
+        let pil_str = pilcom("pil/arrays.pil");
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
         assert_eq!(&pil.to_string(), "pol commit Array.x[2];\npol constant Array.y[2];\n((Array.x[0] * Array.y[1]) - (Array.x[1] * Array.y[0])) == 0\n");
     }
