@@ -185,7 +185,7 @@ impl IndexedReferenceKey {
     }
 
     pub fn index(&self) -> Option<usize> {
-        self.index.clone()
+        self.index
     }
 
     pub fn key(&self) -> &ReferenceKey {
@@ -261,6 +261,7 @@ pub enum Reference {
 }
 
 impl Reference {
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> Option<usize> {
         match self {
             Reference::CmP(r) => r.len,
