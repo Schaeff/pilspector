@@ -58,6 +58,30 @@ impl Pil {
         (key, r)
     }
 
+    pub fn get_exp_reference(
+        &self,
+        exp: &Exp,
+    ) -> (IndexedReferenceKey, &ReferenceInner<ExpressionId>) {
+        let (key, r) = self
+            .references
+            .iter()
+            .filter_map(|(key, r)| match r {
+                Reference::ImP(r) => (exp.id.0 >= r.id.0
+                    && exp.id.0 <= r.id.0 + r.len.unwrap_or(0))
+                .then_some((key, r)),
+                _ => None,
+            })
+            .next()
+            .unwrap();
+
+        let key = IndexedReferenceKey {
+            key: key.clone(),
+            index: r.len.map(|_| exp.id.0 - r.id.0),
+        };
+
+        (key, r)
+    }
+
     pub fn get_const_reference(
         &self,
         c: &Const,
@@ -293,11 +317,11 @@ pub struct PublicCell {
 pub enum Expression {
     Public(ExpressionWrapper<Public>),
     Neg(ExpressionWrapper<Neg>),
-    Exp(ExpressionWrapper<Exp>),
     Add(ExpressionWrapper<Add>),
     Sub(ExpressionWrapper<Sub>),
     Mul(ExpressionWrapper<Mul>),
     Cm(ExpressionWrapper<Cm>),
+    Exp(ExpressionWrapper<Exp>),
     Number(ExpressionWrapper<Number>),
     Const(ExpressionWrapper<Const>),
 }
@@ -527,6 +551,17 @@ mod test {
             );
 
             assert_expression(&e, r#"{"deg":1,"op":"cm","id":42,"next":true}"#);
+
+            // serialize a intermediate polynomial expression
+            let e = Expression::Exp(
+                Exp {
+                    id: 42.into(),
+                    next: true,
+                }
+                .deg(1),
+            );
+
+            assert_expression(&e, r#"{"deg":1,"op":"exp","id":42,"next":true}"#);
 
             // serialize a const polynomial
             let e = Expression::Const(
