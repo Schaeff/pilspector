@@ -475,7 +475,6 @@ impl SmtEncoder {
             Expression::Public(_w) => unimplemented!("public"),
 
             Expression::Neg(w) => sub(0, self.encode_expression(&w.inner.values[0], ctx)),
-            Expression::Exp(_w) => unimplemented!("exp"),
             Expression::Add(w) => self.encode_add(&w.inner, ctx),
             Expression::Sub(w) => self.encode_sub(&w.inner, ctx),
             Expression::Mul(w) => self.encode_mul(&w.inner, ctx),
@@ -548,9 +547,8 @@ mod test {
     }
 
     #[test]
-    #[ignore = "still needs 'exp'"]
     fn encode_arith() {
-        let pil_str = std::fs::read_to_string("arith.pil.json").unwrap();
+        let pil_str = pilcom("pil/zkevm/arith.pil");
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
         let smt_pil = SmtPil::new(pil, known_constants());
