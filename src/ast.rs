@@ -58,8 +58,32 @@ impl Pil {
             .unwrap();
 
         let key = IndexedReferenceKey {
-            key,
+            key: key.clone(),
             index: r.len.map(|_| cm.id.0 - r.id.0),
+        };
+
+        (key, r)
+    }
+
+    pub fn get_exp_reference(
+        &self,
+        exp: &Exp,
+    ) -> (IndexedReferenceKey, &ReferenceInner<ExpressionId>) {
+        let (key, r) = self
+            .references
+            .iter()
+            .filter_map(|(key, r)| match r {
+                Reference::ImP(r) => (exp.id.0 >= r.id.0
+                    && exp.id.0 <= r.id.0 + r.len.unwrap_or(0))
+                .then_some((key, r)),
+                _ => None,
+            })
+            .next()
+            .unwrap();
+
+        let key = IndexedReferenceKey {
+            key: key.clone(),
+            index: r.len.map(|_| exp.id.0 - r.id.0),
         };
 
         (key, r)
@@ -82,11 +106,23 @@ impl Pil {
             .unwrap();
 
         let key = IndexedReferenceKey {
-            key,
+            key: key.clone(),
             index: r.len.map(|_| c.id.0 - r.id.0),
         };
 
         (key, r)
+    }
+
+    pub fn get_indexed_keys(&self, key: &ReferenceKey, ctx: &Pil) -> Vec<IndexedReferenceKey> {
+        let r = &ctx.references[key];
+        match r.len() {
+            // generate `n` keys for arrays of size `n`
+            Some(len) => (0..len)
+                .map(|index| IndexedReferenceKey::array_element(key, index))
+                .collect(),
+            // generate 1 key for non-array polynomials
+            None => vec![IndexedReferenceKey::basic(key)],
+        }
     }
 
     pub fn get_expression(&self, i: &ExpressionId) -> &Expression {
@@ -102,16 +138,90 @@ impl fmt::Display for Pil {
     }
 }
 
+pub trait ToStringWithContext {
+    fn to_string(&self, context: &Pil) -> String;
+}
+
+impl ToStringWithContext for PolIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer
+            .visit_polynomial_identity(self, context, 0)
+            .unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for PlookupIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer.visit_plookup_identity(self, context, 0).unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for PermutationIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer
+            .visit_permutation_identity(self, context, 0)
+            .unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for ConnectionIdentity {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer
+            .visit_connection_identity(self, context, 0)
+            .unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
+impl ToStringWithContext for Expression {
+    fn to_string(&self, context: &Pil) -> String {
+        let mut displayer = PilDisplayer::default();
+        displayer.visit_expression(self, context).unwrap();
+        String::from_utf8(displayer.f).unwrap()
+    }
+}
+
 pub type PublicCellKey = String;
 pub type ReferenceKey = String;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IndexedReferenceKey<'a> {
-    pub key: &'a ReferenceKey,
-    pub index: Option<usize>,
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndexedReferenceKey {
+    key: ReferenceKey,
+    index: Option<usize>,
 }
 
-impl<'a> fmt::Display for IndexedReferenceKey<'a> {
+impl IndexedReferenceKey {
+    pub fn basic(key: &ReferenceKey) -> Self {
+        Self {
+            key: key.clone(),
+            index: None,
+        }
+    }
+
+    pub fn array_element(key: &ReferenceKey, index: usize) -> Self {
+        Self {
+            key: key.clone(),
+            index: Some(index),
+        }
+    }
+
+    pub fn index(&self) -> Option<usize> {
+        self.index
+    }
+
+    pub fn key(&self) -> &ReferenceKey {
+        &self.key
+    }
+}
+
+impl fmt::Display for IndexedReferenceKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.key)?;
         if let Some(index) = self.index {
@@ -129,7 +239,7 @@ pub struct ExpressionId(pub usize);
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
 pub struct CommittedPolynomialId(pub usize);
 // the index of a constant polynomial
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct ConstantPolynomialId(pub usize);
 // the index of a public value in the public list
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
@@ -176,6 +286,17 @@ pub enum Reference {
     CmP(ReferenceInner<CommittedPolynomialId>),
     ConstP(ReferenceInner<ConstantPolynomialId>),
     ImP(ReferenceInner<ExpressionId>),
+}
+
+impl Reference {
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> Option<usize> {
+        match self {
+            Reference::CmP(r) => r.len,
+            Reference::ConstP(r) => r.len,
+            Reference::ImP(r) => r.len,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -231,11 +352,11 @@ pub struct PublicCell {
 pub enum Expression {
     Public(ExpressionWrapper<Public>),
     Neg(ExpressionWrapper<Neg>),
-    Exp(ExpressionWrapper<Exp>),
     Add(ExpressionWrapper<Add>),
     Sub(ExpressionWrapper<Sub>),
     Mul(ExpressionWrapper<Mul>),
     Cm(ExpressionWrapper<Cm>),
+    Exp(ExpressionWrapper<Exp>),
     Number(ExpressionWrapper<Number>),
     Const(ExpressionWrapper<Const>),
 }
@@ -316,25 +437,12 @@ pub struct Number {
     pub value: FieldElement,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Const {
     pub id: ConstantPolynomialId,
     pub next: bool,
-    #[serde(default)]
-    #[serde(skip_serializing)]
-    pub symbolic: bool,
-}
-
-impl PartialEq for Const {
-    fn eq(&self, other: &Self) -> bool {
-        if self.symbolic != other.symbolic {
-            true
-        } else {
-            self.id == other.id && self.next == other.next
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -345,25 +453,12 @@ pub struct Exp {
     pub next: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Cm {
     pub id: CommittedPolynomialId,
     pub next: bool,
-    #[serde(default)]
-    #[serde(skip_serializing)]
-    pub symbolic: bool,
-}
-
-impl PartialEq for Cm {
-    fn eq(&self, other: &Self) -> bool {
-        if self.symbolic != other.symbolic {
-            true
-        } else {
-            self.id == other.id && self.next == other.next
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -377,7 +472,7 @@ pub struct Public {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PolIdentity {
-    // expression id, by index in the expression list
+    // expression id, by index in the expression list, referring to the expression which must equal 0
     pub e: ExpressionId,
     #[serde(flatten)]
     pub location: Location,
@@ -387,9 +482,17 @@ pub struct PolIdentity {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PlookupIdentity {
+    /// What we are looking up
     pub f: Vec<ExpressionId>,
+    /// Where we are looking it up in
     pub t: Vec<ExpressionId>,
+    /// Selector for what we are looking up,
+    /// removes rows where this expresison is zero,
+    /// might alter the value if it is not one.
     pub sel_f: Option<ExpressionId>,
+    /// Selector for where we are looking it up in
+    /// removes rows where this expresison is zero,
+    /// might alter the value if it is not one.
     pub sel_t: Option<ExpressionId>,
     #[serde(flatten)]
     pub location: Location,
@@ -478,19 +581,28 @@ mod test {
                 Cm {
                     id: 42.into(),
                     next: true,
-                    symbolic: false,
                 }
                 .deg(1),
             );
 
             assert_expression(&e, r#"{"deg":1,"op":"cm","id":42,"next":true}"#);
 
+            // serialize a intermediate polynomial expression
+            let e = Expression::Exp(
+                Exp {
+                    id: 42.into(),
+                    next: true,
+                }
+                .deg(1),
+            );
+
+            assert_expression(&e, r#"{"deg":1,"op":"exp","id":42,"next":true}"#);
+
             // serialize a const polynomial
             let e = Expression::Const(
                 Const {
                     id: 42.into(),
                     next: true,
-                    symbolic: false,
                 }
                 .deg(1),
             );

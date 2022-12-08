@@ -16,6 +16,19 @@ impl SMTVariable {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SMTFunction {
+    pub name: String,
+    pub sort: SMTSort,
+    pub args: Vec<SMTVariable>,
+}
+
+impl SMTFunction {
+    pub fn new(name: String, sort: SMTSort, args: Vec<SMTVariable>) -> Self {
+        SMTFunction { name, sort, args }
+    }
+}
+
 /// We keep the SMT expressions loose and runtime based for now.
 /// A potential future refactor may add compile time guarantees
 /// that illegal expressions cannot be built.
@@ -34,6 +47,13 @@ impl From<u64> for SMTExpr {
     }
 }
 
+pub fn signed_to_smt(input: i64) -> SMTExpr {
+    SMTExpr {
+        op: SMTOp::Literal(format!("{}", input), SMTSort::Int),
+        args: vec![],
+    }
+}
+
 impl From<SMTVariable> for SMTExpr {
     fn from(input: SMTVariable) -> SMTExpr {
         SMTExpr {
@@ -49,7 +69,7 @@ pub enum SMTStatement {
     DeclareConst(SMTVariable),
     DeclareFun(SMTVariable, Vec<SMTSort>),
     DefineConst(SMTVariable, SMTExpr),
-    DefineFun(SMTVariable, Vec<SMTSort>, SMTExpr),
+    DefineFun(SMTVariable, Vec<SMTVariable>, SMTExpr),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -68,14 +88,14 @@ pub enum SMTOp {
     Le,
     Gt,
     Ge,
+    Exists(Vec<SMTVariable>),
     Literal(String, SMTSort),
     Variable(SMTVariable),
-    UF(SMTVariable), // TODO We should have a specialized SMTFunction
+    UF(SMTFunction), // TODO We should have a specialized SMTFunction
 }
 
 // SMT expression builders
 
-/*
 pub fn eq<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Eq,
@@ -83,14 +103,17 @@ pub fn eq<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
+/*
 pub fn neq<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     not(eq(lhs, rhs))
 }
+*/
 
 pub fn eq_zero<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     eq(expr, 0)
 }
 
+/*
 pub fn neq_zero<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     neq(expr, 0)
 }
@@ -101,7 +124,7 @@ pub fn not<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
         args: vec![expr.into()],
     }
 }
-*/
+
 
 pub fn and<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
@@ -109,19 +132,20 @@ pub fn and<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
         args: vec![lhs.into(), rhs.into()],
     }
 }
+*/
 
-/*
-pub fn and_vec(args: Vec<SMTExpr>) -> SMTExpr {
+pub fn and_vec(args: Vec<impl Into<SMTExpr>>) -> SMTExpr {
     match args.len() {
         0 => literal_true(),
-        1 => args.into_iter().next().unwrap(),
+        1 => args.into_iter().next().unwrap().into(),
         _ => SMTExpr {
             op: SMTOp::And,
-            args,
+            args: args.into_iter().map(|a| a.into()).collect(),
         },
     }
 }
 
+/*
 pub fn or<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Or,
@@ -139,7 +163,7 @@ pub fn or_vec(args: Vec<SMTExpr>) -> SMTExpr {
         },
     }
 }
-
+*/
 pub fn ite<C: Into<SMTExpr>, T: Into<SMTExpr>, F: Into<SMTExpr>>(
     cond: C,
     true_term: T,
@@ -150,11 +174,19 @@ pub fn ite<C: Into<SMTExpr>, T: Into<SMTExpr>, F: Into<SMTExpr>>(
         args: vec![cond.into(), true_term.into(), false_term.into()],
     }
 }
-
+/*
 pub fn implies(premise: impl Into<SMTExpr>, conclusion: impl Into<SMTExpr>) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Implies,
         args: vec![premise.into(), conclusion.into()],
+    }
+}
+*/
+
+pub fn exists(vars: Vec<SMTVariable>, inner: SMTExpr) -> SMTExpr {
+    SMTExpr {
+        op: SMTOp::Exists(vars),
+        args: vec![inner],
     }
 }
 
@@ -179,6 +211,7 @@ pub fn mul<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
+/*
 pub fn div<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Div,
@@ -217,7 +250,6 @@ pub fn ge<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
-/*
 pub fn literal(lit: String, sort: SMTSort) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Literal(lit, sort),
@@ -225,7 +257,7 @@ pub fn literal(lit: String, sort: SMTSort) -> SMTExpr {
     }
 }
 
-pub fn uf(function: SMTVariable, args: Vec<SMTExpr>) -> SMTExpr {
+pub fn uf(function: SMTFunction, args: Vec<SMTExpr>) -> SMTExpr {
     SMTExpr {
         op: SMTOp::UF(function),
         args,
@@ -243,16 +275,18 @@ pub fn literal_true() -> SMTExpr {
     literal_bool("true".to_string())
 }
 
+/*
 pub fn literal_false() -> SMTExpr {
     literal_bool("false".to_string())
 }
 */
 
 // SMT statement builders
-
+/*
 pub fn assert(expr: SMTExpr) -> SMTStatement {
     SMTStatement::Assert(expr)
 }
+*/
 
 pub fn declare_const(var: SMTVariable) -> SMTStatement {
     SMTStatement::DeclareConst(var)
@@ -266,11 +300,11 @@ pub fn declare_fun(var: SMTVariable, sorts: Vec<SMTSort>) -> SMTStatement {
 pub fn define_const(var: SMTVariable, val: SMTExpr) -> SMTStatement {
     SMTStatement::DefineConst(var, val)
 }
-
-pub fn define_fun(var: SMTVariable, sorts: Vec<SMTSort>, val: SMTExpr) -> SMTStatement {
-    SMTStatement::DefineFun(var, sorts, val)
-}
 */
+
+pub fn define_fun(fun: SMTFunction, val: SMTExpr) -> SMTStatement {
+    SMTStatement::DefineFun(SMTVariable::new(fun.name, fun.sort), fun.args, val)
+}
 
 // Format stuff
 
@@ -357,6 +391,17 @@ impl SMTFormat for SMTExpr {
                 assert!(self.args.len() == 2);
                 format!("(>= {} {})", self.args[0].as_smt(), self.args[1].as_smt())
             }
+            SMTOp::Exists(vars) => {
+                assert!(self.args.len() == 1);
+                format!(
+                    "(exists ({}) {})",
+                    vars.iter()
+                        .map(|var| format!("({} {})", var.name, var.sort.as_smt()))
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                    self.args[0].as_smt(),
+                )
+            }
             SMTOp::Literal(lit, sort) => match sort {
                 SMTSort::Bool => lit.to_string(),
                 SMTSort::Int => lit.to_string(),
@@ -390,10 +435,13 @@ impl SMTFormat for SMTStatement {
                 var.sort.as_smt(),
                 expr.as_smt()
             ),
-            SMTStatement::DefineFun(var, sorts, expr) => format!(
+            SMTStatement::DefineFun(var, vars, expr) => format!(
                 "(define-fun {} ({}) {} {})",
                 var.name,
-                sorts.as_smt(),
+                vars.iter()
+                    .map(|var| format!("({} {})", var.name, var.sort.as_smt()))
+                    .collect::<Vec<String>>()
+                    .join(" "),
                 var.sort.as_smt(),
                 expr.as_smt()
             ),

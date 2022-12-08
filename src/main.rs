@@ -1,8 +1,9 @@
 use clap::{Parser, Subcommand};
 
-use pilspector::analyser;
+use pilspector::{analyser, pilcom_from_str};
 use pilspector::ast::Pil;
-use pilspector::smt_encoder::SmtPil;
+use pilspector::load_pil;
+use pilspector::smt_encoder::{known_constants, SmtPil};
 
 #[derive(Debug, Parser)]
 #[clap(name = "Pilspector", version = env!("CARGO_PKG_VERSION"))]
@@ -15,6 +16,7 @@ struct Opts {
 pub enum Subcommands {
     #[clap(about = "Pretty print a compiled PIL JSON.")]
     Display(Args),
+    #[clap(about = "Generate a libSMT for a PIL.")]
     SMT(Args),
     #[clap(about = "Apply heuristics to find underconstrained variables in PIL")]
     Analyse(Args),
@@ -22,12 +24,7 @@ pub enum Subcommands {
 
 #[derive(Debug, Clone, Parser, Default)]
 pub struct Args {
-    #[clap(
-        long,
-        short = 'i',
-        value_name = "PIL_JSON",
-        help = "The compiled PIL JSON"
-    )]
+    #[clap(value_name = "PIL_FILE", help = "The PIL input file or its JSON")]
     pub input_file: String,
 }
 
@@ -35,25 +32,32 @@ fn main() {
     let opts = Opts::parse();
     match opts.sub {
         Subcommands::Display(args) => {
-            let pil_str = std::fs::read_to_string(args.input_file).unwrap();
-            let pil: Pil = serde_json::from_str(&pil_str).unwrap();
-            println!("{}", pil);
+            println!("{}", load_pil(&args.input_file));
         }
         Subcommands::SMT(args) => {
-            let pil_str = std::fs::read_to_string(args.input_file).unwrap();
-            let pil: Pil = serde_json::from_str(&pil_str).unwrap();
-            let smt_pil = SmtPil::new(pil);
+            let pil = load_pil(&args.input_file);
+            let smt_pil = SmtPil::new(pil, known_constants());
             println!("{}", smt_pil);
         }
         Subcommands::Analyse(args) => {
-            let pil_str = std::fs::read_to_string(args.input_file).unwrap();
-            let pil: Pil = serde_json::from_str(&pil_str).unwrap();
+            let pil = load_pil(&args.input_file);
+
+            let pattern = r#"
+                namespace Pattern(%N);
+                    pol commit SET;
+                    pol commit freeIn;
+                    pol commit out;
+                    out' = SET*freeIn + (1 - SET)*(out + freeIn);
+            "#;
+
+            let pattern: Pil = serde_json::from_str(&pilcom_from_str(pattern).unwrap()).unwrap();
+
             println!();
             println!("Variables which appear the least in the state machine:");
             println!("{}", analyser::OccurrenceCounter::count(&pil));
             println!();
-            println!("Occurrences of the pattern `(1 - c) * x == (1 - c) * y`:");
-            println!("{}", analyser::PatternDetector::detect(&pil));
+            println!("Occurrences of the pattern:");
+            println!("{}", analyser::PatternDetector::detect(&pil, &pattern));
         }
     }
 }
