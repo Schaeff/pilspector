@@ -270,15 +270,6 @@ impl SmtEncoder {
         SMTFunction::new(format!("constr_{}", constr_idx), SMTSort::Bool, smt_vars)
     }
 
-    fn all_vars_from_key(&self, key: &IndexedReferenceKey) -> Vec<SMTVariable> {
-        [false, true]
-            .iter()
-            .flat_map(|next| {
-                (0..=2).map(|row| self.key_to_smt_var(key, *next, Some(format!("row{}", row))))
-            })
-            .collect()
-    }
-
     fn define_constants(&mut self) {
         let constants = self
             .constants
@@ -293,19 +284,31 @@ impl SmtEncoder {
     fn encode_query(&self, p: &Pil, state_machine: &SMTFunction, rows: usize) -> Vec<SMTStatement> {
         let mut decls: Vec<SMTVariable> = vec![];
         let mut appls: Vec<SMTExpr> = vec![];
+        let mut rows_constrs: Vec<SMTExpr> = vec![];
 
         (0..rows).for_each(|row| {
+            let smt_row = SMTVariable::new(format!("row{}", row), SMTSort::Int);
+            if row > 0 {
+                let smt_prev_row = SMTVariable::new(format!("row{}", row - 1), SMTSort::Int);
+                rows_constrs.push(eq(
+                    smt_row.clone(),
+                    add(smt_prev_row, 1)
+                ));
+            }
             (0..=1).for_each(|exec| {
-                let inner_decls: Vec<SMTVariable> = state_machine
+                let mut inner_decls: Vec<SMTVariable> = vec![smt_row.clone()];
+                inner_decls.extend(state_machine
                     .args
                     .iter()
+                    .skip(1)
                     .map(|arg| {
                         SMTVariable::new(
                             format!("{}_row{}_exec{}", arg.name, row, exec),
                             arg.sort.clone(),
                         )
                     })
-                    .collect();
+                    .collect::<Vec<_>>()
+                );
                 appls.push(uf(
                     state_machine.clone(),
                     inner_decls
@@ -318,16 +321,12 @@ impl SmtEncoder {
             })
         });
 
-        let mut statements: Vec<SMTStatement> =
-            decls.into_iter().map(|decl| declare_const(decl)).collect();
-        statements.push(assert(and_vec(appls)));
+        let mut statements: Vec<SMTStatement> = decls.into_iter().map(declare_const).collect();
+        statements.push(assert(and_vec(vec![rows_constrs, appls].concat())));
 
         // TODO add equalities between out_r1 and out_next_r0
         // TODO add equalities between in_r0_e0 and in_r0_e1
         // TODO add query on final output variables
-        // TODO add row argument to state machine
-        // TODO add one row variable per row
-        // TODO add constraints row1 = row0 + 1 etc
 
         statements
     }
@@ -340,11 +339,13 @@ impl SmtEncoder {
                 const_collector.visit_polynomial_identity(i, p, 0).unwrap();
             }
         });
-        let mut smt_vars: Vec<_> = const_collector
+        let mut smt_vars: Vec<_> = vec![SMTVariable::new("row".to_string(), SMTSort::Int)];
+        smt_vars.extend(const_collector
             .consts
             .iter()
             .map(|(key, next)| self.key_to_smt_var(key, *next, None))
-            .collect();
+            .collect::<Vec<_>>()
+        );
 
         let mut collector = VariableCollector::new();
         collector.visit_pil(p).unwrap();
@@ -396,7 +397,7 @@ impl Visitor for SmtEncoder {
         self.out(define_fun(state_function.clone(), body));
 
         let query = self.encode_query(p, &state_function, 3);
-        self.out_vec(query.clone());
+        self.out_vec(query);
 
         Ok(())
     }
