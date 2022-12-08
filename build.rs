@@ -14,11 +14,8 @@ fn main() {
         .expect("process failed to execute");
 
     // install pilcom
-    let out = Command::new("npm")
+    let _ = Command::new("npm")
         .args(["install", "--prefix", "./pilcom"])
         .output()
         .expect("process failed to execute");
-
-    println!("{:?}", out);
-    panic!()
 }
