@@ -10,7 +10,7 @@ mod visitor;
 pub(crate) fn pilcom(f: &str) -> String {
     use std::{path::PathBuf, process::Command};
 
-    let f = PathBuf::from("pil").join(PathBuf::from(f));
+    let f = PathBuf::from(f);
 
     let dir = tempdir::TempDir::new("pil_output").unwrap();
     std::fs::create_dir_all(dir.path().join(f.clone().parent().unwrap())).unwrap();
@@ -37,21 +37,21 @@ mod test {
 
     #[test]
     fn parse_main() {
-        let pil_str = pilcom("zkevm/main.pil");
+        let pil_str = pilcom("pil/zkevm/main.pil");
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
         pil.validate().unwrap();
     }
 
     #[test]
     fn display_adder() {
-        let pil_str = pilcom("adder.pil");
+        let pil_str = pilcom("pil/adder.pil");
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
         println!("{}", pil);
     }
 
     #[test]
     fn display_main() {
-        let pil_str = pilcom("zkevm/main.pil");
+        let pil_str = pilcom("pil/zkevm/main.pil");
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
         println!("{}", pil);
     }

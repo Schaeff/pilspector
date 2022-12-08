@@ -169,7 +169,7 @@ mod test {
 
     #[test]
     fn encode_byte4() {
-        let pil_str = pilcom("zkevm/byte4.pil");
+        let pil_str = pilcom("pil/zkevm/byte4.pil");
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
         let smt_pil = SmtPil::new(pil);
