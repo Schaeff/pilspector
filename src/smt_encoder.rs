@@ -521,7 +521,7 @@ mod test {
 
     #[test]
     fn encode_byte4() {
-        let pil_str = pilcom("pil/zkevm/byte4.pil");
+        let pil_str = pilcom("pil/zkevm/byte4.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
         let smt_pil = SmtPil::new(pil, known_constants());
@@ -531,7 +531,7 @@ mod test {
 
     #[test]
     fn encode_arith() {
-        let pil_str = pilcom("pil/zkevm/arith.pil");
+        let pil_str = pilcom("pil/zkevm/arith.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
         let smt_pil = SmtPil::new(pil, known_constants());
