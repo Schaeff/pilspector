@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
 use pilspector::ast::Pil;
+use pilspector::load_pil;
 use pilspector::smt_encoder::{known_constants, SmtPil};
 
 #[derive(Debug, Parser)]
@@ -14,17 +15,13 @@ struct Opts {
 pub enum Subcommands {
     #[clap(about = "Pretty print a compiled PIL JSON.")]
     Display(Args),
+    #[clap(about = "Generate a libSMT for a PIL.")]
     SMT(Args),
 }
 
 #[derive(Debug, Clone, Parser, Default)]
 pub struct Args {
-    #[clap(
-        long,
-        short = 'i',
-        value_name = "PIL_JSON",
-        help = "The compiled PIL JSON"
-    )]
+    #[clap(value_name = "PIL_FILE", help = "The PIL input file or its JSON")]
     pub input_file: String,
 }
 
@@ -32,13 +29,10 @@ fn main() {
     let opts = Opts::parse();
     match opts.sub {
         Subcommands::Display(args) => {
-            let pil_str = std::fs::read_to_string(args.input_file).unwrap();
-            let pil: Pil = serde_json::from_str(&pil_str).unwrap();
-            println!("{}", pil);
+            println!("{}", load_pil(&args.input_file));
         }
         Subcommands::SMT(args) => {
-            let pil_str = std::fs::read_to_string(args.input_file).unwrap();
-            let pil: Pil = serde_json::from_str(&pil_str).unwrap();
+            let pil = load_pil(&args.input_file);
             let smt_pil = SmtPil::new(pil, known_constants());
             println!("{}", smt_pil);
         }
