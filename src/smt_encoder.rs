@@ -148,9 +148,14 @@ impl SmtPil {
     }
 }
 
+enum Constraint {
+    Identity(PolIdentity),
+    Lookup(PlookupIdentity),
+}
+
 pub struct SmtEncoder {
     pub smt: Vec<SMTStatement>,
-    funs: Vec<SMTFunction>,
+    funs: Vec<(SMTFunction, Constraint)>,
     constants: BTreeMap<String, SMTStatement>,
 }
 
@@ -193,12 +198,14 @@ impl fmt::Display for SmtPil {
 
 struct VariableCollector {
     vars: BTreeSet<ShiftedPolynomial>,
+    consts: BTreeSet<ShiftedPolynomial>,
 }
 
 impl VariableCollector {
     fn new() -> Self {
         Self {
             vars: BTreeSet::default(),
+            consts: BTreeSet::default(),
         }
     }
 }
@@ -272,18 +279,33 @@ impl SmtEncoder {
     }
 
     fn encode_state_machine(&self, p: &Pil) -> SMTStatement {
-        let mut collector = VariableCollector::new();
-        collector.visit_pil(p).unwrap();
-        let smt_vars: Vec<_> = collector
-            .vars
+        let mut const_collector = VariableCollector::new();
+        self.funs.iter().for_each(|(_, constr)| {
+            if let Constraint::Identity(i) = constr {
+                // The index 0 below is not used in the visitor.
+                const_collector.visit_polynomial_identity(i, p, 0).unwrap();
+            }
+        });
+        let mut smt_vars: Vec<_> = const_collector
+            .consts
             .iter()
             .map(|pol| self.pol_to_smt_var(pol, None))
             .collect();
 
+        let mut collector = VariableCollector::new();
+        collector.visit_pil(p).unwrap();
+        smt_vars.extend(
+            collector
+                .vars
+                .iter()
+                .map(|(key, next)| self.key_to_smt_var(key, *next, None))
+                .collect::<Vec<_>>(),
+        );
+
         let body = and_vec(
             self.funs
                 .iter()
-                .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
+                .map(|(f, _)| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
                 .collect::<Vec<_>>(),
         );
 
@@ -359,7 +381,8 @@ impl Visitor for SmtEncoder {
         let constr = &ctx.expressions[i.e.0];
         let expr = eq_zero(self.encode_expression(constr, ctx));
         let fun = self.constr_to_smt_function(i, idx, ctx);
-        self.funs.push(fun.clone());
+        self.funs
+            .push((fun.clone(), Constraint::Identity(i.clone())));
         let fun_def = define_fun(fun, expr);
         self.out(fun_def);
         Ok(())
@@ -434,7 +457,8 @@ impl Visitor for SmtEncoder {
             .collect();
         let lookup_function =
             SMTFunction::new(format!("lookup_{}", idx), SMTSort::Bool, parameters);
-        self.funs.push(lookup_function.clone());
+        self.funs
+            .push((lookup_function.clone(), Constraint::Lookup(i.clone())));
 
         let fun_def = define_fun(lookup_function, exists(vec![row], and_vec(conditions)));
         self.out(fun_def);
