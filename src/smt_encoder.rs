@@ -66,6 +66,69 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
             ]),
         ),
     );
+    // All the GL_SIGNED constants are built in the same way, with parameters
+    // from, to, steps:
+    // starts at "start", stays at a value for "steps" steps, then is incrementd by 1
+    // if it reaches "end", is reset to "start" (only after the steps, i.e. "end" is
+    // included in the range)
+    // formally:
+    // (r, v) => v == start + floor(r / steps) % (end + 1 - start)
+    fn range_constant(start: i64, end: i64, step: i64) -> SMTExpr {
+        let r = SMTVariable::new("r".to_string(), SMTSort::Int);
+        let v = SMTVariable::new("v".to_string(), SMTSort::Int);
+        let k = SMTVariable::new("k".to_string(), SMTSort::Int);
+        assert_eq!(
+            constant_lookup_function(String::new()).args,
+            vec![r.clone(), v.clone()]
+        );
+        assert!(end >= start);
+        let span = (end + 1 - start) as u64;
+        if step == 1 {
+            // v == start + r % span
+            // v >= start && v <= end && exists k: v == start + r + k * span
+            and_vec(vec![
+                ge(v.clone(), signed_to_smt(start)),
+                le(v.clone(), signed_to_smt(end)),
+                exists(
+                    vec![k.clone()],
+                    eq(v, add(signed_to_smt(start), add(r, mul(k, span)))),
+                ),
+            ])
+        } else {
+            // v == start + floor(r / step) % span
+            // v >= start && v <= end && exists k: v == start + floor(r / step) + k * span
+            unimplemented!()
+        }
+    }
+    result.insert(
+        "Arith.GL_SIGNED_4BITS_C0".to_string(),
+        define_fun(
+            constant_lookup_function("Arith_GL_SIGNED_4BITS_C0".to_string()),
+            range_constant(-16, 16, 1),
+        ),
+    );
+    result.insert(
+        "Arith.GL_SIGNED_4BITS_C1".to_string(),
+        define_fun(
+            constant_lookup_function("Arith_GL_SIGNED_4BITS_C1".to_string()),
+            range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33
+        ),
+    );
+    result.insert(
+        "Arith.GL_SIGNED_4BITS_C2".to_string(),
+        define_fun(
+            constant_lookup_function("Arith_GL_SIGNED_4BITS_C2".to_string()),
+            range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33 * 33
+        ),
+    );
+    result.insert(
+        "Arith.GL_SIGNED_18BITS".to_string(),
+        define_fun(
+            constant_lookup_function("Arith_GL_SIGNED_18BITS".to_string()),
+            range_constant(-(1 << 18), 1 << 18, 1),
+        ),
+    );
+
     result
 }
 
@@ -353,7 +416,7 @@ impl Visitor for SmtEncoder {
             unimplemented!("Selectors for 'to' not implemented: {}", i.to_string(ctx));
         }
 
-        let row = SMTVariable::new("row".to_string(), SMTSort::Bool);
+        let row = SMTVariable::new("row".to_string(), SMTSort::Int);
 
         let mut collector = VariableCollector::new();
         assert_eq!(i.f.len(), i.t.len());
@@ -393,7 +456,7 @@ impl Visitor for SmtEncoder {
             SMTFunction::new(format!("lookup_{}", idx), SMTSort::Bool, parameters);
         self.funs.push(lookup_function.clone());
 
-        let fun_def = define_fun(lookup_function, exists(row, and_vec(conditions)));
+        let fun_def = define_fun(lookup_function, exists(vec![row], and_vec(conditions)));
         self.out(fun_def);
 
         Ok(())
@@ -403,24 +466,16 @@ impl Visitor for SmtEncoder {
 impl SmtEncoder {
     fn encode_expression(&self, e: &Expression, ctx: &Pil) -> SMTExpr {
         match e {
-            /*
-            Expression::Public(w) => {
-            encode_public(&w.inner)
-            }
-            Expression::Neg(w) => {
-            encode_neg(&w.inner)
-            }
-            Expression::Exp(w) => {
-            encode_exp(&w.inner)
-            }
-            */
+            Expression::Public(_w) => unimplemented!("public"),
+
+            Expression::Neg(w) => sub(0, self.encode_expression(&w.inner.values[0], ctx)),
+            Expression::Exp(_w) => unimplemented!("exp"),
             Expression::Add(w) => self.encode_add(&w.inner, ctx),
             Expression::Sub(w) => self.encode_sub(&w.inner, ctx),
             Expression::Mul(w) => self.encode_mul(&w.inner, ctx),
             Expression::Cm(w) => self.encode_cm(&w.inner, ctx),
             Expression::Number(w) => self.encode_number(&w.inner),
             Expression::Const(w) => self.encode_const(&w.inner, ctx),
-            _ => panic!(),
         }
     }
 
@@ -479,7 +534,7 @@ mod test {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "still needs 'exp'"]
     fn encode_arith() {
         let pil_str = std::fs::read_to_string("arith.pil.json").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();

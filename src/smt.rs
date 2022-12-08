@@ -47,6 +47,13 @@ impl From<u64> for SMTExpr {
     }
 }
 
+pub fn signed_to_smt(input: i64) -> SMTExpr {
+    SMTExpr {
+        op: SMTOp::Literal(format!("{}", input), SMTSort::Int),
+        args: vec![],
+    }
+}
+
 impl From<SMTVariable> for SMTExpr {
     fn from(input: SMTVariable) -> SMTExpr {
         SMTExpr {
@@ -81,7 +88,7 @@ pub enum SMTOp {
     Le,
     Gt,
     Ge,
-    Exists,
+    Exists(Vec<SMTVariable>),
     Literal(String, SMTSort),
     Variable(SMTVariable),
     UF(SMTFunction), // TODO We should have a specialized SMTFunction
@@ -176,10 +183,10 @@ pub fn implies(premise: impl Into<SMTExpr>, conclusion: impl Into<SMTExpr>) -> S
 }
 */
 
-pub fn exists(var: SMTVariable, inner: SMTExpr) -> SMTExpr {
+pub fn exists(vars: Vec<SMTVariable>, inner: SMTExpr) -> SMTExpr {
     SMTExpr {
-        op: SMTOp::Exists,
-        args: vec![var.into(), inner],
+        op: SMTOp::Exists(vars),
+        args: vec![inner],
     }
 }
 
@@ -384,12 +391,15 @@ impl SMTFormat for SMTExpr {
                 assert!(self.args.len() == 2);
                 format!("(>= {} {})", self.args[0].as_smt(), self.args[1].as_smt())
             }
-            SMTOp::Exists => {
-                assert!(self.args.len() == 2);
+            SMTOp::Exists(vars) => {
+                assert!(self.args.len() == 1);
                 format!(
                     "(exists ({}) {})",
+                    vars.iter()
+                        .map(|var| format!("({} {})", var.name, var.sort.as_smt()))
+                        .collect::<Vec<String>>()
+                        .join(" "),
                     self.args[0].as_smt(),
-                    self.args[1].as_smt()
                 )
             }
             SMTOp::Literal(lit, sort) => match sort {
