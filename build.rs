@@ -28,7 +28,8 @@ fn main() {
                 .output()
                 .expect("process failed to execute");
 
-            println!("{:?}", out);
+            eprintln!("{:?}", out);
         }
     }
+    println!("cargo:rerun-if-changed=pil");
 }
