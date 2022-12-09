@@ -19,6 +19,7 @@ pub struct PatternDetector {
 
 impl PatternDetector {
     pub fn detect(pil: &Pil, pattern_pil: &Pil) -> Vec<String> {
+        assert_eq!(pattern_pil.pol_identities.len(), 1, "pattern must have a single polynomial identity");
         let expression = &pattern_pil.expressions[pattern_pil.pol_identities[0].e.0];
 
         let mut detector = PatternDetector {
