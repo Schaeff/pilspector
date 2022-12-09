@@ -271,9 +271,9 @@ pub fn fold_reference<F: Folder>(
 }
 
 pub fn fold_reference_inner<F: Folder, Id>(
-    f: &mut F,
+    _f: &mut F,
     i: ReferenceInner<Id>,
-    ctx: &mut Pil,
+    _ctx: &mut Pil,
 ) -> Result<ReferenceInner<Id>, F::Error> {
     Ok(i)
 }
@@ -291,9 +291,9 @@ pub fn fold_polynomial_identity<F: Folder>(
 }
 
 pub fn fold_expression_id<F: Folder>(
-    f: &mut F,
+    _f: &mut F,
     id: ExpressionId,
-    ctx: &mut Pil,
+    _ctx: &mut Pil,
 ) -> Result<ExpressionId, F::Error> {
     Ok(id)
 }

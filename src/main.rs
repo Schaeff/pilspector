@@ -1,9 +1,8 @@
 use clap::{Parser, Subcommand};
 
-use pilspector::ast::{Pil, ToStringWithContext};
+use pilspector::analyser;
 use pilspector::load_pil;
 use pilspector::smt_encoder::{known_constants, SmtPil};
-use pilspector::{analyser, pilcom_from_str};
 
 #[derive(Debug, Parser)]
 #[clap(name = "Pilspector", version = env!("CARGO_PKG_VERSION"))]
@@ -47,27 +46,36 @@ fn main() {
             println!("{}", analyser::OccurrenceCounter::count(&pil));
             println!();
 
+            println!("Pattern detection based on `./pil/patterns`");
+
             for pattern_entry in std::fs::read_dir("pil/patterns").unwrap() {
                 let pattern_path = pattern_entry.unwrap().path();
-                let pattern_name = pattern_path.file_name().unwrap().to_str().unwrap();
-                let pattern = load_pil(&pattern_path.display().to_string());
+                if pattern_path
+                    .extension()
+                    .as_ref()
+                    .map(|e| e.to_str().unwrap())
+                    == Some("pil")
+                {
+                    let pattern_name = pattern_path.file_name().unwrap().to_str().unwrap();
+                    let pattern = load_pil(&pattern_path.display().to_string());
 
-                println!(
-                    "Search for the `{}` pattern in polynomial identites",
-                    pattern_name
-                );
-                let occurences = analyser::PatternDetector::detect(&pil, &pattern);
-                println!("Found {} occurences:", occurences.len());
-                for (occurence, assignment) in occurences {
-                    println!("Occurence:");
-                    println!("{}", occurence);
+                    println!(
+                        "Search for the `{}` pattern in polynomial identites",
+                        pattern_name
+                    );
+                    let occurences = analyser::PatternDetector::detect(&pil, &pattern);
+                    println!("Found {} occurences:", occurences.len());
+                    for (occurence, assignment) in occurences {
+                        println!("Occurence:");
+                        println!("{}", occurence);
+                        println!();
+                        println!("With assignment:");
+                        println!("{}", assignment);
+                        println!();
+                        println!()
+                    }
                     println!();
-                    println!("With assignment:");
-                    println!("{}", assignment);
-                    println!();
-                    println!()
                 }
-                println!();
             }
         }
     }
