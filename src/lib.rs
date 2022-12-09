@@ -3,6 +3,7 @@ use ast::Pil;
 pub mod ast;
 // mod constants;
 mod displayer;
+pub mod lookup_constants;
 mod smt;
 pub mod smt_encoder;
 pub mod solver;
