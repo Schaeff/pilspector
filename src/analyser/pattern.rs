@@ -117,7 +117,7 @@ impl Matches for Expression {
                                     (pol, e.clone()),
                                 ],
                             ),
-                            Err(..) => (true, vec![]),
+                            Err(..) => (false, vec![]),
                         }
                     }
                 };
@@ -412,5 +412,51 @@ mod test {
         let inlined = ExpInliner::inline(original);
         // they are not exactly equal because the expression array is different, but when resolvoing everything, they are
         assert_eq!(inlined.to_string(), expected.to_string());
+    }
+
+    #[test]
+    fn readme_tests() {
+        let pattern = r#"
+namespace Pattern(%N);
+    pol commit x, y, z;
+    x' * y = z;
+"#;
+
+        let matches = vec![
+            r#"namespace SM(%N);
+    pol commit a;
+    pol constant b;
+    (a' + b') * (a - b) = 1;
+"#,
+        ];
+
+        let fails = vec![
+            // r#"
+            // namespace SM0(%N);
+            //     pol commit a;
+            //     pol constant b;
+            //     (a' + b') * (a + b) = 1;
+            // "#,
+            r#"
+            namespace SM1(%N);
+                pol commit a;
+                pol constant b;
+                // `a' + b` cannot match `x'` because we can't match `x` to anything
+                // fix by using more symbolic variables
+                (a' + b) * (a - b) = 1;
+            "#,
+        ];
+
+        let pattern: Pil = serde_json::from_str(&pilcom_from_str(pattern).unwrap()).unwrap();
+
+        for s in matches {
+            let pil = serde_json::from_str(&pilcom_from_str(s).unwrap()).unwrap();
+            assert_eq!(PatternDetector::detect(&pil, &pattern).len(), 1);
+        }
+
+        for s in fails {
+            let pil = serde_json::from_str(&pilcom_from_str(s).unwrap()).unwrap();
+            assert_eq!(PatternDetector::detect(&pil, &pattern).len(), 0);
+        }
     }
 }

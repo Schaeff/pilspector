@@ -22,7 +22,7 @@ pub fn pilcom_from_str(source: &str) -> Result<String, String> {
 
     let out_file = dir.path().join(f.clone()).with_extension("pil.json");
 
-    Command::new("node")
+    let res = Command::new("node")
         .args([
             "pilcom/src/pil.js",
             f.as_os_str().to_str().unwrap(),
@@ -32,7 +32,11 @@ pub fn pilcom_from_str(source: &str) -> Result<String, String> {
         .output()
         .map_err(|err| format!("Could not run pilcom: {}", err))?;
 
-    std::fs::read_to_string(out_file).map_err(|_| "pilcom compilation failed".into())
+    if !res.status.success() {
+        return Err(String::from_utf8(res.stdout).unwrap());
+    }
+
+    Ok(std::fs::read_to_string(out_file).unwrap())
 }
 
 /// compile a file with pilcom
