@@ -281,8 +281,13 @@ impl SmtEncoder {
         let mut appls: Vec<SMTExpr> = vec![];
         let mut rows_constrs: Vec<SMTExpr> = vec![];
 
+        // Unroll the state machine `rows` times
+        // state_machine(row_i, input_row_i, out_row_i, out_next_row_i)
         (0..rows).for_each(|row| {
+            // Create a `row` variable for each row.
             let smt_row = SMTVariable::new(format!("row{}", row), SMTSort::Int);
+            // For every sequential pair of rows,
+            // add the constraint `(= row (+ prev_row 1))`.
             if row > 0 {
                 let smt_prev_row = SMTVariable::new(format!("row{}", row - 1), SMTSort::Int);
                 rows_constrs.push(eq(
@@ -290,7 +295,13 @@ impl SmtEncoder {
                     add(smt_prev_row, 1)
                 ));
             }
+            // Do that for two executions that act on the same inputs
+            // but on different syntactic outputs, so that at the end
+            // we can query whether they can be different.
+            // state_machine(row_i, input_row_i_exec_0, out_row_i_exec_0, out_next_row_i_exec_0)
+            // state_machine(row_i, input_row_i_exec_1, out_row_i_exec_1, out_next_row_i_exec_1)
             (0..=1).for_each(|exec| {
+                // Create the variables
                 let mut inner_decls: Vec<SMTVariable> = vec![smt_row.clone()];
                 inner_decls.extend(state_machine
                     .args
@@ -304,6 +315,7 @@ impl SmtEncoder {
                     })
                     .collect::<Vec<_>>()
                 );
+                // Create the `state_machine` function application.
                 appls.push(uf(
                     state_machine.clone(),
                     inner_decls
