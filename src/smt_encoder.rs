@@ -260,8 +260,8 @@ impl SmtEncoder {
         let constr = &ctx.expressions[i.e.0];
         collector.visit_expression(constr, ctx).unwrap();
         let smt_vars: Vec<_> = [
-            collector.consts.iter().map(|c| c).collect::<Vec<_>>(),
-            collector.vars.iter().map(|v| v).collect::<Vec<_>>(),
+            collector.consts.iter().collect::<Vec<_>>(),
+            collector.vars.iter().collect::<Vec<_>>(),
         ]
         .concat()
         .iter()
@@ -281,7 +281,13 @@ impl SmtEncoder {
         }
     }
 
-    fn encode_state_machine(&mut self, p: &Pil, rows: usize) {
+    fn encode_state_machine(
+        &mut self,
+        p: &Pil,
+        rows: usize,
+        in_vars: BTreeSet<String>,
+        out_vars: BTreeSet<String>,
+    ) {
         // Collect only constants that appear in constraints.
         // Constants that appear only in the RHS of a lookup
         // do not need to be a parameter in the state machine.
@@ -339,7 +345,7 @@ impl SmtEncoder {
 
         let all_vars = [
             const_collector.consts.iter().map(|c| c).collect::<Vec<_>>(),
-            collector.vars.iter().map(|v| v).collect::<Vec<_>>(),
+            collector.vars.iter().collect::<Vec<_>>(),
         ]
         .concat();
 
@@ -348,25 +354,33 @@ impl SmtEncoder {
         (0..rows).for_each(|row| {
             // Create a `row` variable for each row.
             let smt_row = SMTVariable::new(format!("row{}", row), SMTSort::Int);
+
             // For every sequential pair of rows,
             // add the constraint `(= row (+ prev_row 1))`.
             if row > 0 {
                 let smt_prev_row = SMTVariable::new(format!("row{}", row - 1), SMTSort::Int);
                 rows_constrs.push(eq(smt_row.clone(), add(smt_prev_row, 1)));
             }
+
             // Do that for two executions that act on the same inputs
             // but on different syntactic outputs, so that at the end
             // we can query whether they can be different.
             // state_machine(row_i, input_row_i_exec_0, out_row_i_exec_0, out_next_row_i_exec_0)
             // state_machine(row_i, input_row_i_exec_1, out_row_i_exec_1, out_next_row_i_exec_1)
             (0..=1).for_each(|exec| {
-                // Create the variables
+                // Create the state machine arguments
                 let mut inner_decls: BTreeSet<SMTVariable> = BTreeSet::default();
+
+                // Add row to the state machine arguments
                 inner_decls.insert(smt_row.clone());
+
                 all_vars.iter().for_each(|(key, next)| {
+                    // Create and declare the variable for this row and execution.
                     let smt_var =
                         self.key_to_smt_var(key, *next, Some(format!("_row{}_exec{}", row, exec)));
                     inner_decls.insert(smt_var.clone());
+
+                    // Bind `var` and `next_var` in two sequential rows in the same execution.
                     if row > 0 && !*next {
                         let prev_smt_var = self.key_to_smt_var(
                             key,
@@ -374,9 +388,25 @@ impl SmtEncoder {
                             Some(format!("_row{}_exec{}", row - 1, exec)),
                         );
                         decls.insert(prev_smt_var.clone());
-                        next_constrs.push(eq(smt_var, prev_smt_var));
+                        next_constrs.push(eq(smt_var.clone(), prev_smt_var));
+                    }
+
+                    // Bind two input variables of same row and different execution.
+                    if exec > 0
+                        && in_vars
+                            .get(&self.key_to_smt_var(key, *next, None).name)
+                            .is_some()
+                    {
+                        let other_exec_smt_var = self.key_to_smt_var(
+                            key,
+                            *next,
+                            Some(format!("_row{}_exec{}", row, exec - 1)),
+                        );
+                        assert!(decls.get(&other_exec_smt_var).is_some());
+                        next_constrs.push(eq(smt_var, other_exec_smt_var));
                     }
                 });
+
                 // Create the `state_machine` function application.
                 appls.push(uf(
                     state_machine_decl.clone(),
@@ -386,6 +416,8 @@ impl SmtEncoder {
                         .map(|decl| decl.into())
                         .collect::<Vec<SMTExpr>>(),
                 ));
+
+                // Add the state machine arguments of this iteration to the declaration set.
                 decls.extend(inner_decls);
             })
         });
@@ -395,10 +427,27 @@ impl SmtEncoder {
             vec![rows_constrs, next_constrs, appls].concat(),
         )));
 
-        self.out_vec(statements);
+        // Create nondeterminism query
+        let query = not(and_vec(
+            all_vars
+                .iter()
+                .filter(|(key, next)| {
+                    out_vars
+                        .get(&self.key_to_smt_var(key, *next, None).name)
+                        .is_some()
+                })
+                .map(|(key, next)| {
+                    eq(
+                        self.key_to_smt_var(key, *next, Some(format!("_row{}_exec0", rows - 1))),
+                        self.key_to_smt_var(key, *next, Some(format!("_row{}_exec1", rows - 1))),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        ));
 
-        // TODO add equalities between in_r0_e0 and in_r0_e1
-        // TODO add query on final output variables
+        statements.push(assert(query));
+
+        self.out_vec(statements);
     }
 }
 
@@ -424,13 +473,9 @@ impl Visitor for SmtEncoder {
             self.visit_polynomial_identity(identity, ctx, index)?;
         }
 
-        //let (state_function, body) = self.encode_state_machine(p);
-        //self.out(define_fun(state_function.clone(), body));
-
-        //let query = self.encode_query(p, &state_function, 3);
-        //self.out_vec(query);
-
-        self.encode_state_machine(p, 3);
+        let in_vars = BTreeSet::from(["Byte4_freeIN".to_string()]);
+        let out_vars = BTreeSet::from(["Byte4_out".to_string()]);
+        self.encode_state_machine(p, 3, in_vars, out_vars);
 
         Ok(())
     }
