@@ -1,0 +1,4 @@
+namespace Pattern(%N);
+    pol commit a0, s0, a1, s1, rest;
+    pol res = s0 * a0 + s1 * a1 + rest;
+    res = s0 * a0 + s1 * a1 + rest;

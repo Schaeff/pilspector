@@ -1,0 +1,4 @@
+namespace Pattern(%N);
+    pol commit condition, consequence, alternative;
+    pol res = condition * (consequence - alternative) - alternative;
+    res = condition * (consequence - alternative) - alternative;

@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::{
     ast::{
-        Add, Cm, Const, Exp, Expression, ExpressionWrapper, Mul, Neg, Pil, PolIdentity,
-        ShiftedPolynomial, Sub, ToPolynomial,
+        Add, Cm, Const, Exp, Expression, ExpressionId, ExpressionWrapper, Mul, Neg, Pil,
+        PolIdentity, Polynomials, ShiftedPolynomial, Sub, ToPolynomial, ToStringWithContext,
     },
     displayer::PilDisplayer,
-    folder::Folder,
+    folder::{fold_expression, fold_reference, Folder},
     visitor::Visitor,
 };
 
@@ -14,12 +14,22 @@ pub struct PatternDetector {
     pil: Pil,
     pattern_pil: Pil,
     pattern: Expression,
-    occurrences: Vec<Expression>,
+    occurrences: Vec<(Expression, String)>,
 }
 
+pub type SymbolicAssignment = HashMap<ShiftedPolynomial, Expression>;
+
 impl PatternDetector {
-    pub fn detect(pil: &Pil, pattern_pil: &Pil) -> Vec<String> {
-        assert_eq!(pattern_pil.pol_identities.len(), 1, "pattern must have a single polynomial identity");
+    pub fn detect(pil: &Pil, pattern_pil: &Pil) -> Vec<(String, String)> {
+        // first inline all intermediates
+        let pil = &ExpInliner::inline(pil.clone());
+        let pattern_pil = &ExpInliner::inline(pattern_pil.clone());
+
+        assert_eq!(
+            pattern_pil.pol_identities.len(),
+            1,
+            "pattern must have a single polynomial identity"
+        );
         let expression = &pattern_pil.expressions[pattern_pil.pol_identities[0].e.0];
 
         let mut detector = PatternDetector {
@@ -32,23 +42,22 @@ impl PatternDetector {
 
         detector
             .occurrences
-            .iter()
-            .map(|e| {
+            .into_iter()
+            .map(|(e, assignment)| {
                 let mut displayer = PilDisplayer::default();
-                displayer.visit_expression(e, pil).unwrap();
-                String::from_utf8(displayer.f).unwrap()
+                displayer.visit_expression(&e, pil).unwrap();
+                (String::from_utf8(displayer.f).unwrap(), assignment)
             })
             .collect::<Vec<_>>()
     }
 
-    fn matches(&self, e: &Expression) -> bool {
+    fn matches(&self, e: &Expression) -> (bool, SymbolicAssignment) {
         e.matches(
             &self.pattern,
             &self.pil,
             &self.pattern_pil,
             HashMap::default(),
         )
-        .0
     }
 }
 
@@ -58,8 +67,8 @@ trait Matches {
         pattern: &Self,
         ctx: &Pil,
         pattern_ctx: &Pil,
-        bindings: HashMap<ShiftedPolynomial, Expression>,
-    ) -> (bool, HashMap<ShiftedPolynomial, Expression>);
+        bindings: SymbolicAssignment,
+    ) -> (bool, SymbolicAssignment);
 }
 
 impl Matches for Expression {
@@ -68,8 +77,8 @@ impl Matches for Expression {
         pattern: &Expression,
         ctx: &Pil,
         pattern_ctx: &Pil,
-        mut bindings: HashMap<ShiftedPolynomial, Expression>,
-    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        mut bindings: SymbolicAssignment,
+    ) -> (bool, SymbolicAssignment) {
         // println!("try match {} to {}", self.to_string(ctx), pattern.to_string(pattern_ctx));
         // println!("{}", bindings.iter().map(|(key, value)| format!("{} -> {}", key.to_string(), value.to_string(ctx))).collect::<Vec<_>>().join(", "));
 
@@ -89,9 +98,9 @@ impl Matches for Expression {
 
                         // if this symbolic variable isn't assigned, we only assign is if its other `next` can also be assigned
                         let other_e = if pol.next {
-                            RowShifter::previous(e.clone(), ctx)
+                            RowShifter::previous(e.clone(), &ctx)
                         } else {
-                            RowShifter::next(e.clone(), ctx)
+                            RowShifter::next(e.clone(), &ctx)
                         };
 
                         match other_e {
@@ -144,8 +153,8 @@ impl<E: Matches> Matches for ExpressionWrapper<E> {
         pattern: &Self,
         ctx: &Pil,
         pattern_ctx: &Pil,
-        bindings: HashMap<ShiftedPolynomial, Expression>,
-    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        bindings: SymbolicAssignment,
+    ) -> (bool, SymbolicAssignment) {
         self.inner
             .matches(&pattern.inner, ctx, pattern_ctx, bindings)
     }
@@ -157,8 +166,8 @@ impl Matches for Add {
         pattern: &Self,
         ctx: &Pil,
         pattern_ctx: &Pil,
-        bindings: HashMap<ShiftedPolynomial, Expression>,
-    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        bindings: SymbolicAssignment,
+    ) -> (bool, SymbolicAssignment) {
         let (left_match, bindings) =
             self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings);
         if !left_match {
@@ -180,8 +189,8 @@ impl Matches for Sub {
         pattern: &Self,
         ctx: &Pil,
         pattern_ctx: &Pil,
-        bindings: HashMap<ShiftedPolynomial, Expression>,
-    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        bindings: SymbolicAssignment,
+    ) -> (bool, SymbolicAssignment) {
         let (left_match, bindings) =
             self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings);
         if !left_match {
@@ -197,8 +206,8 @@ impl Matches for Mul {
         pattern: &Self,
         ctx: &Pil,
         pattern_ctx: &Pil,
-        bindings: HashMap<ShiftedPolynomial, Expression>,
-    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        bindings: SymbolicAssignment,
+    ) -> (bool, SymbolicAssignment) {
         let (left_match, bindings) =
             self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings);
         if !left_match {
@@ -220,8 +229,8 @@ impl Matches for Neg {
         pattern: &Self,
         ctx: &Pil,
         pattern_ctx: &Pil,
-        bindings: HashMap<ShiftedPolynomial, Expression>,
-    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        bindings: SymbolicAssignment,
+    ) -> (bool, SymbolicAssignment) {
         self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings)
     }
 }
@@ -237,8 +246,18 @@ impl Visitor for PatternDetector {
     ) -> crate::visitor::Result<Self::Error> {
         let e = &ctx.expressions[i.e.0];
 
-        if self.matches(e) {
-            self.occurrences.push(e.clone());
+        let (matches, assignment) = self.matches(e);
+
+        if matches {
+            let assignment_str = format!(
+                "{}",
+                assignment
+                    .iter()
+                    .map(|(key, value)| format!("{} -> {}", key.to_string(), value.to_string(ctx)))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+            self.occurrences.push((e.clone(), assignment_str));
         }
 
         Ok(())
@@ -254,10 +273,14 @@ struct RowShifter {
 
 impl RowShifter {
     fn next(e: Expression, ctx: &Pil) -> Result<Expression, ()> {
+        let ctx = &mut ctx.clone();
+
         RowShifter { forward: true }.fold_expression(e, ctx)
     }
 
     fn previous(e: Expression, ctx: &Pil) -> Result<Expression, ()> {
+        let ctx = &mut ctx.clone();
+
         RowShifter { forward: false }.fold_expression(e, ctx)
     }
 }
@@ -287,7 +310,7 @@ impl Folder for RowShifter {
         }
     }
 
-    fn fold_exp(&mut self, exp: Exp, _ctx: &Pil) -> Result<Exp, Self::Error> {
+    fn fold_exp(&mut self, exp: Exp, ctx: &Pil) -> Result<Exp, Self::Error> {
         if self.forward == exp.next {
             Err(())
         } else {
@@ -295,6 +318,54 @@ impl Folder for RowShifter {
                 next: self.forward,
                 ..exp
             })
+        }
+    }
+}
+
+#[derive(Default)]
+struct ExpInliner {}
+
+impl ExpInliner {
+    fn inline(pil: Pil) -> Pil {
+        let ctx = pil.clone();
+        Self::default().fold_pil(pil).unwrap()
+    }
+}
+
+impl Folder for ExpInliner {
+    type Error = ();
+
+    fn fold_reference(
+        &mut self,
+        r: Polynomials,
+        ctx: &mut Pil,
+    ) -> Result<Option<Polynomials>, Self::Error> {
+        match r {
+            // Polynomials::ImP(_) => Ok(None), // remove intermediates
+            p => fold_reference(self, p, ctx),
+        }
+    }
+
+    fn fold_polynomial_identity(
+        &mut self,
+        i: PolIdentity,
+        ctx: &mut Pil,
+        index: usize,
+    ) -> Result<PolIdentity, Self::Error> {
+        let expression = ctx.expressions[i.e.0].clone();
+        let inlined = self.fold_expression(expression.clone(), &ctx).unwrap();
+        ctx.expressions[i.e.0] = inlined;
+        Ok(i)
+    }
+
+    fn fold_expression(&mut self, e: Expression, ctx: &Pil) -> Result<Expression, Self::Error> {
+        match e {
+            Expression::Exp(exp) => {
+                // we want to inline it
+                // go where it's stored and replace by that
+                Ok(ctx.expressions[exp.inner.id.0].clone())
+            }
+            e => fold_expression(self, e, ctx),
         }
     }
 }
@@ -318,5 +389,28 @@ mod test {
         let pattern: Pil = serde_json::from_str(&pilcom_from_str(pattern).unwrap()).unwrap();
 
         assert_eq!(PatternDetector::detect(&pil, &pattern).len(), 1);
+    }
+
+    #[test]
+    fn inline() {
+        let original = r#"
+        namespace Thing(%N);
+            pol commit a, b;
+            pol c = a * b;
+            c = a + b;
+    "#;
+
+        let expected = r#"
+    namespace Thing(%N);
+        pol commit a, b;
+        a * b = a + b;
+"#;
+
+        let original: Pil = serde_json::from_str(&pilcom_from_str(original).unwrap()).unwrap();
+        let expected: Pil = serde_json::from_str(&pilcom_from_str(expected).unwrap()).unwrap();
+
+        let inlined = ExpInliner::inline(original);
+        // they are not exactly equal because the expression array is different, but when resolvoing everything, they are
+        assert_eq!(inlined.to_string(), expected.to_string());
     }
 }

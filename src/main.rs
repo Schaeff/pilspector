@@ -42,26 +42,32 @@ fn main() {
         Subcommands::Analyse(args) => {
             let pil = load_pil(&args.input_file);
 
-            let pattern = r#"
-                namespace Pattern(%N);
-                    pol commit cIn, RESET, cOut;
-                    cIn' * ( 1 - RESET' ) = cOut * ( 1 - RESET' );
-            "#;
-
-            let pattern: Pil = serde_json::from_str(&pilcom_from_str(pattern).unwrap()).unwrap();
-
             println!();
             println!("Variables which appear the least in the state machine:");
             println!("{}", analyser::OccurrenceCounter::count(&pil));
             println!();
-            println!(
-                "Search for the pattern `{}` in polynomial identites",
-                pattern.pol_identities[0].to_string(&pattern)
-            );
-            let occurences = analyser::PatternDetector::detect(&pil, &pattern);
-            println!("Found {} occurences:", occurences.len());
-            for occurence in occurences {
-                println!("{}", occurence);
+
+            for pattern_entry in std::fs::read_dir("pil/patterns").unwrap() {
+                let pattern_path = pattern_entry.unwrap().path();
+                let pattern_name = pattern_path.file_name().unwrap().to_str().unwrap();
+                let pattern = load_pil(&pattern_path.display().to_string());
+
+                println!(
+                    "Search for the `{}` pattern in polynomial identites",
+                    pattern_name
+                );
+                let occurences = analyser::PatternDetector::detect(&pil, &pattern);
+                println!("Found {} occurences:", occurences.len());
+                for (occurence, assignment) in occurences {
+                    println!("Occurence:");
+                    println!("{}", occurence);
+                    println!();
+                    println!("With assignment:");
+                    println!("{}", assignment);
+                    println!();
+                    println!()
+                }
+                println!();
             }
         }
     }
