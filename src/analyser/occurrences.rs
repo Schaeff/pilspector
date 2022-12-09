@@ -38,10 +38,11 @@ impl Visitor for OccurrenceCounter {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::pilcom;
 
     #[test]
     fn rank_adder() {
-        let pil_str = std::fs::read_to_string("main.pil.json").unwrap();
+        let pil_str = pilcom("pil/zkevm/main.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
         println!("occurrences {:#?}", &OccurrenceCounter::count(&pil)[0..50]);

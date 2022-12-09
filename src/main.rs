@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use pilspector::ast::Pil;
+use pilspector::ast::{Pil, ToStringWithContext};
 use pilspector::load_pil;
 use pilspector::smt_encoder::{known_constants, SmtPil};
 use pilspector::{analyser, pilcom_from_str};
@@ -54,8 +54,15 @@ fn main() {
             println!("Variables which appear the least in the state machine:");
             println!("{}", analyser::OccurrenceCounter::count(&pil));
             println!();
-            println!("Occurrences of the pattern:");
-            println!("{}", analyser::PatternDetector::detect(&pil, &pattern));
+            println!(
+                "Search for the pattern `{}` in polynomial identites",
+                pattern.pol_identities[0].to_string(&pattern)
+            );
+            let occurences = analyser::PatternDetector::detect(&pil, &pattern);
+            println!("Found {} occurences:", occurences.len());
+            for occurence in occurences {
+                println!("{}", occurence);
+            }
         }
     }
 }

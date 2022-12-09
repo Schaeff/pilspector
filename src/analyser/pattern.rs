@@ -18,7 +18,7 @@ pub struct PatternDetector {
 }
 
 impl PatternDetector {
-    pub fn detect(pil: &Pil, pattern_pil: &Pil) -> String {
+    pub fn detect(pil: &Pil, pattern_pil: &Pil) -> Vec<String> {
         let expression = &pattern_pil.expressions[pattern_pil.pol_identities[0].e.0];
 
         let mut detector = PatternDetector {
@@ -38,7 +38,6 @@ impl PatternDetector {
                 String::from_utf8(displayer.f).unwrap()
             })
             .collect::<Vec<_>>()
-            .join("\n")
     }
 
     fn matches(&self, e: &Expression) -> bool {
@@ -307,7 +306,7 @@ mod test {
 
     #[test]
     fn detect_pattern_in_binary() {
-        let pil: Pil = serde_json::from_str(&pilcom("binary.pil").unwrap()).unwrap();
+        let pil: Pil = serde_json::from_str(&pilcom("pil/zkevm/binary.pil").unwrap()).unwrap();
 
         let pattern = r#"
         namespace Pattern(%N);
@@ -317,6 +316,6 @@ mod test {
 
         let pattern: Pil = serde_json::from_str(&pilcom_from_str(pattern).unwrap()).unwrap();
 
-        println!("occurrences\n{}", &PatternDetector::detect(&pil, &pattern));
+        assert_eq!(PatternDetector::detect(&pil, &pattern).len(), 1);
     }
 }

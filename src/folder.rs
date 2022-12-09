@@ -181,7 +181,11 @@ pub trait Folder: Sized {
         unimplemented!()
     }
 
-    fn fold_public_cell(&mut self, _cell: PublicCell, _ctx: &Pil) -> Result<PublicCell, Self::Error> {
+    fn fold_public_cell(
+        &mut self,
+        _cell: PublicCell,
+        _ctx: &Pil,
+    ) -> Result<PublicCell, Self::Error> {
         unimplemented!()
     }
 }
@@ -282,5 +286,3 @@ fn fold_const<F: Folder>(_f: &mut F, _c: Const, _ctx: &Pil) -> Result<Const, F::
 fn fold_number<F: Folder>(_f: &mut F, c: Number, _ctx: &Pil) -> Result<Number, F::Error> {
     Ok(c)
 }
-
-
