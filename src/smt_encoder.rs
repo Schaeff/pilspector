@@ -4,6 +4,7 @@ use std::fmt;
 
 use crate::ast::*;
 use crate::lookup_constants::constant_lookup_function;
+use crate::lookup_constants::LookupConstants;
 use crate::smt::*;
 use crate::visitor::*;
 
@@ -14,7 +15,7 @@ pub struct SmtPil {
     /// (define-fun <constant name> ((row Int) (v Int)) Bool ...)
     /// that return true if and only if the constant value in row `row`
     /// is equal to `v`.
-    constants: BTreeMap<String, SMTStatement>,
+    lookup_constants: LookupConstants,
     in_vars: BTreeSet<String>,
     out_vars: BTreeSet<String>,
 }
@@ -22,13 +23,13 @@ pub struct SmtPil {
 impl SmtPil {
     pub fn new(
         pil: Pil,
-        constants: BTreeMap<String, SMTStatement>,
+        lookup_constants: LookupConstants,
         in_vars: BTreeSet<String>,
         out_vars: BTreeSet<String>,
     ) -> Self {
         Self {
             pil,
-            constants,
+            lookup_constants,
             in_vars,
             out_vars,
         }
@@ -44,7 +45,7 @@ pub struct SmtEncoder {
     pub smt: Vec<SMTStatement>,
     funs: Vec<SMTFunction>,
     fun_constraints: BTreeMap<String, Constraint>,
-    constants: BTreeMap<String, SMTStatement>,
+    lookup_constants: LookupConstants,
     in_vars: BTreeSet<String>,
     out_vars: BTreeSet<String>,
 }
@@ -65,7 +66,7 @@ impl fmt::Display for SmtPil {
             smt: Vec::default(),
             funs: Vec::default(),
             fun_constraints: BTreeMap::default(),
-            constants: self.constants.clone(),
+            lookup_constants: self.lookup_constants.clone(),
             in_vars: self.in_vars.clone(),
             out_vars: self.out_vars.clone(),
         };
@@ -127,7 +128,7 @@ impl Visitor for VariableCollector {
     }
 }
 
-fn escape_identifier(input: &str) -> String {
+pub fn escape_identifier(input: &str) -> String {
     input
         .replace(['.', '['], "_")
         .replace(']', "")
@@ -159,12 +160,7 @@ impl SmtEncoder {
     }
 
     fn define_constants(&mut self) {
-        let constants = self
-            .constants
-            .iter()
-            .map(|(_name, fun)| fun.clone())
-            .collect::<Vec<_>>();
-        for c in constants {
+        for c in self.lookup_constants.function_definitions() {
             self.out(c);
         }
     }
@@ -428,13 +424,9 @@ impl Visitor for SmtEncoder {
                 let lookup = match &ctx.expressions[lookup.0] {
                     Expression::Const(w) => {
                         let lookup = w.inner.to_polynomial(ctx);
-                        let lookup_name = self
-                            .constants
-                            .iter()
-                            .find(|(name, _)| lookup == Polynomial::basic(name).with_next(false))
+                        self.lookup_constants
+                            .known_lookup_constant_escaped(&lookup)
                             .unwrap_or_else(|| panic!("const {} in plookup is not known", lookup))
-                            .0;
-                        escape_identifier(lookup_name)
                     }
                     _ => unimplemented!(),
                 };
@@ -526,7 +518,7 @@ impl SmtEncoder {
 
 #[cfg(test)]
 mod test {
-    use crate::{lookup_constants::known_constants, pilcom};
+    use crate::pilcom;
 
     use super::*;
 
@@ -537,7 +529,7 @@ mod test {
 
         let smt_pil = SmtPil::new(
             pil,
-            known_constants(),
+            LookupConstants::new(),
             BTreeSet::default(),
             BTreeSet::default(),
         );
@@ -552,7 +544,7 @@ mod test {
 
         let smt_pil = SmtPil::new(
             pil,
-            known_constants(),
+            LookupConstants::new(),
             BTreeSet::default(),
             BTreeSet::default(),
         );

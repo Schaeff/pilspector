@@ -1,12 +1,51 @@
 use std::collections::BTreeMap;
 
+use crate::ast::*;
 use crate::smt::*;
+use crate::smt_encoder::escape_identifier;
 
 pub fn constant_lookup_function(name: String) -> SMTFunction {
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
     let v = SMTVariable::new("v".to_string(), SMTSort::Int);
     SMTFunction::new(name, SMTSort::Bool, vec![r, v])
 }
+
+#[derive(Debug, Clone)]
+pub struct LookupConstants {
+    constants: BTreeMap<String, SMTStatement>,
+}
+
+impl Default for LookupConstants {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
+impl LookupConstants {
+    pub fn new() -> LookupConstants {
+        LookupConstants {
+            constants: known_constants(),
+        }
+    }
+    pub fn known_lookup_constant_escaped(&self, lookup: &ShiftedPolynomial) -> Option<String> {
+        self.constants
+            .iter()
+            .find(|(name, _)| *lookup == Polynomial::basic(name).with_next(false))
+            .map(|(name, _)| escape_identifier(name))
+    }
+
+    pub fn function_definitions(&self) -> Vec<SMTStatement> {
+        self.constants
+            .iter()
+            .map(|(_name, def)| def.clone())
+            .collect()
+    }
+}
+/// The statement should be SMT functions of the form
+/// (define-fun <constant name> ((row Int) (v Int)) Bool ...)
+/// that return true if and only if the constant value in row `row`
+/// is equal to `v`.
 
 pub fn known_constants() -> BTreeMap<String, SMTStatement> {
     let mut result = BTreeMap::new();

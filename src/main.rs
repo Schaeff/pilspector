@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use clap::{Parser, Subcommand};
 
 use pilspector::load_pil;
-use pilspector::lookup_constants::known_constants;
+use pilspector::lookup_constants::LookupConstants;
 use pilspector::smt_encoder::SmtPil;
 use pilspector::solver;
 
