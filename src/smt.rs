@@ -1,10 +1,10 @@
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SMTSort {
     Bool,
     Int,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SMTVariable {
     pub name: String,
     pub sort: SMTSort,
@@ -408,7 +408,7 @@ impl SMTFormat for SMTExpr {
             SMTOp::Variable(var) => format!("({} {})", var.as_smt(), self.args.as_smt()),
 
             SMTOp::UF(function) => {
-                format!("({} {})", function.name, self.args.as_smt())
+                format!("\n\t\t({} {})", function.name, self.args.as_smt())
             }
         }
     }
@@ -434,7 +434,7 @@ impl SMTFormat for SMTStatement {
                 expr.as_smt()
             ),
             SMTStatement::DefineFun(var, vars, expr) => format!(
-                "(define-fun {} ({}) {} {})",
+                "(define-fun {} ({}) {} {})\n",
                 var.name,
                 vars.iter()
                     .map(|var| format!("({} {})", var.name, var.sort.as_smt()))
