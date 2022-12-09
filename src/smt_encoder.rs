@@ -349,7 +349,7 @@ impl SmtEncoder {
         let mut next_constrs: Vec<SMTExpr> = vec![];
 
         let all_vars = [
-            const_collector.consts.iter().map(|c| c).collect::<Vec<_>>(),
+            const_collector.consts.iter().collect::<Vec<_>>(),
             collector.vars.iter().collect::<Vec<_>>(),
         ]
         .concat();
