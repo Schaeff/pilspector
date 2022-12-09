@@ -140,11 +140,23 @@ pub struct SmtPil {
     /// that return true if and only if the constant value in row `row`
     /// is equal to `v`.
     constants: BTreeMap<String, SMTStatement>,
+    in_vars: BTreeSet<String>,
+    out_vars: BTreeSet<String>,
 }
 
 impl SmtPil {
-    pub fn new(pil: Pil, constants: BTreeMap<String, SMTStatement>) -> Self {
-        Self { pil, constants }
+    pub fn new(
+        pil: Pil,
+        constants: BTreeMap<String, SMTStatement>,
+        in_vars: BTreeSet<String>,
+        out_vars: BTreeSet<String>,
+    ) -> Self {
+        Self {
+            pil,
+            constants,
+            in_vars,
+            out_vars,
+        }
     }
 }
 
@@ -158,6 +170,8 @@ pub struct SmtEncoder {
     funs: Vec<SMTFunction>,
     fun_constraints: BTreeMap<String, Constraint>,
     constants: BTreeMap<String, SMTStatement>,
+    in_vars: BTreeSet<String>,
+    out_vars: BTreeSet<String>,
 }
 
 impl SmtEncoder {
@@ -177,6 +191,8 @@ impl fmt::Display for SmtPil {
             funs: Vec::default(),
             fun_constraints: BTreeMap::default(),
             constants: self.constants.clone(),
+            in_vars: self.in_vars.clone(),
+            out_vars: self.out_vars.clone(),
         };
         encoder.define_constants();
         encoder.visit_pil(&self.pil)?;
@@ -281,13 +297,7 @@ impl SmtEncoder {
         }
     }
 
-    fn encode_state_machine(
-        &mut self,
-        p: &Pil,
-        rows: usize,
-        in_vars: BTreeSet<String>,
-        out_vars: BTreeSet<String>,
-    ) {
+    fn encode_state_machine(&mut self, p: &Pil, rows: usize) {
         // Collect only constants that appear in constraints.
         // Constants that appear only in the RHS of a lookup
         // do not need to be a parameter in the state machine.
@@ -393,7 +403,8 @@ impl SmtEncoder {
 
                     // Bind two input variables of same row and different execution.
                     if exec > 0
-                        && in_vars
+                        && self
+                            .in_vars
                             .get(&self.key_to_smt_var(key, *next, None).name)
                             .is_some()
                     {
@@ -427,25 +438,35 @@ impl SmtEncoder {
             vec![rows_constrs, next_constrs, appls].concat(),
         )));
 
-        // Create nondeterminism query
-        let query = not(and_vec(
-            all_vars
-                .iter()
-                .filter(|(key, next)| {
-                    out_vars
-                        .get(&self.key_to_smt_var(key, *next, None).name)
-                        .is_some()
-                })
-                .map(|(key, next)| {
-                    eq(
-                        self.key_to_smt_var(key, *next, Some(format!("_row{}_exec0", rows - 1))),
-                        self.key_to_smt_var(key, *next, Some(format!("_row{}_exec1", rows - 1))),
-                    )
-                })
-                .collect::<Vec<_>>(),
-        ));
+        if !self.out_vars.is_empty() {
+            // Create nondeterminism query
+            let query = not(and_vec(
+                all_vars
+                    .iter()
+                    .filter(|(key, next)| {
+                        self.out_vars
+                            .get(&self.key_to_smt_var(key, *next, None).name)
+                            .is_some()
+                    })
+                    .map(|(key, next)| {
+                        eq(
+                            self.key_to_smt_var(
+                                key,
+                                *next,
+                                Some(format!("_row{}_exec0", rows - 1)),
+                            ),
+                            self.key_to_smt_var(
+                                key,
+                                *next,
+                                Some(format!("_row{}_exec1", rows - 1)),
+                            ),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            ));
 
-        statements.push(assert(query));
+            statements.push(assert(query));
+        }
 
         self.out_vec(statements);
     }
@@ -473,9 +494,7 @@ impl Visitor for SmtEncoder {
             self.visit_polynomial_identity(identity, ctx, index)?;
         }
 
-        let in_vars = BTreeSet::from(["Byte4_freeIN".to_string()]);
-        let out_vars = BTreeSet::from(["Byte4_out".to_string()]);
-        self.encode_state_machine(p, 3, in_vars, out_vars);
+        self.encode_state_machine(p, 3);
 
         Ok(())
     }
@@ -653,7 +672,12 @@ mod test {
         let pil_str = pilcom("pil/zkevm/byte4.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
-        let smt_pil = SmtPil::new(pil, known_constants());
+        let smt_pil = SmtPil::new(
+            pil,
+            known_constants(),
+            BTreeSet::default(),
+            BTreeSet::default(),
+        );
 
         println!("{}", smt_pil);
     }
@@ -663,7 +687,12 @@ mod test {
         let pil_str = pilcom("pil/zkevm/arith.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
-        let smt_pil = SmtPil::new(pil, known_constants());
+        let smt_pil = SmtPil::new(
+            pil,
+            known_constants(),
+            BTreeSet::default(),
+            BTreeSet::default(),
+        );
 
         println!("{}", smt_pil);
     }
