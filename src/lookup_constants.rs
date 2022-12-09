@@ -21,7 +21,6 @@ impl Default for LookupConstants {
     }
 }
 
-
 impl LookupConstants {
     pub fn new() -> LookupConstants {
         LookupConstants {
@@ -33,6 +32,27 @@ impl LookupConstants {
             .iter()
             .find(|(name, _)| *lookup == Polynomial::basic(name).with_next(false))
             .map(|(name, _)| escape_identifier(name))
+    }
+
+    pub fn encode_lookup(&self, lhs: Vec<SMTExpr>, rhs: Vec<ShiftedPolynomial>) -> SMTExpr {
+        assert_eq!(lhs.len(), rhs.len());
+        let row = SMTVariable::new("row".to_string(), SMTSort::Int);
+        exists(
+            vec![row.clone()],
+            and_vec(
+                lhs.into_iter()
+                    .zip(rhs.iter())
+                    .map(|(expr, constant)| {
+                        uf(
+                            constant_lookup_function(
+                                self.known_lookup_constant_escaped(constant).unwrap(),
+                            ),
+                            vec![row.clone().into(), expr],
+                        )
+                    })
+                    .collect(),
+            ),
+        )
     }
 
     pub fn function_definitions(&self) -> Vec<SMTStatement> {

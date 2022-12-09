@@ -3,7 +3,6 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 use crate::ast::*;
-use crate::lookup_constants::constant_lookup_function;
 use crate::lookup_constants::LookupConstants;
 use crate::smt::*;
 use crate::visitor::*;
@@ -410,32 +409,31 @@ impl Visitor for SmtEncoder {
             unimplemented!("Selectors for 'to' not implemented: {}", i.to_string(ctx));
         }
 
-        let row = SMTVariable::new("row".to_string(), SMTSort::Int);
-
         let mut collector = VariableCollector::new();
         assert_eq!(i.f.len(), i.t.len());
-        let conditions = i
-            .f
-            .iter()
-            .zip(i.t.iter())
-            .map(|(key, lookup)| {
-                collector.visit_expression_id(key, ctx).unwrap();
-                let key = self.encode_expression_by_id(key, ctx);
-                let lookup = match &ctx.expressions[lookup.0] {
+        let lhs_exprs: Vec<SMTExpr> =
+            i.f.iter()
+                .map(|expr| {
+                    collector.visit_expression_id(expr, ctx).unwrap();
+                    self.encode_expression_by_id(expr, ctx)
+                })
+                .collect();
+        let rhs_constants: Vec<ShiftedPolynomial> =
+            i.t.iter()
+                .map(|lookup| match &ctx.expressions[lookup.0] {
                     Expression::Const(w) => {
                         let lookup = w.inner.to_polynomial(ctx);
-                        self.lookup_constants
+                        if self.lookup_constants
                             .known_lookup_constant_escaped(&lookup)
-                            .unwrap_or_else(|| panic!("const {} in plookup is not known", lookup))
+                            .is_none()
+                        {
+                            panic!("const {} in plookup is not known", lookup);
+                        }
+                        lookup
                     }
                     _ => unimplemented!(),
-                };
-                uf(
-                    constant_lookup_function(lookup),
-                    vec![row.clone().into(), key],
-                )
-            })
-            .collect();
+                })
+                .collect();
 
         let parameters: Vec<_> = collector
             .vars
@@ -448,7 +446,10 @@ impl Visitor for SmtEncoder {
         self.fun_constraints
             .insert(lookup_function.name.clone(), Constraint::Lookup(i.clone()));
 
-        let fun_def = define_fun(lookup_function, exists(vec![row], and_vec(conditions)));
+        let fun_def = define_fun(
+            lookup_function,
+            self.lookup_constants.encode_lookup(lhs_exprs, rhs_constants),
+        );
         self.out(fun_def);
 
         Ok(())
