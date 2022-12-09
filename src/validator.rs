@@ -53,7 +53,7 @@ impl Visitor for Validator {
         Ok(())
     }
 
-    fn visit_reference(&mut self, r: &Polynomials, _: &Pil) -> Result<Self::Error> {
+    fn visit_polynomials(&mut self, r: &Polynomials, _: &Pil) -> Result<Self::Error> {
         match r {
             Polynomials::ConstP(r) => {
                 self.constant_count += r.len.unwrap_or(1);

@@ -315,9 +315,9 @@ impl From<usize> for RowId {
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
 pub enum Polynomials {
-    CmP(ReferenceInner<CommittedPolynomialId>),
-    ConstP(ReferenceInner<ConstantPolynomialId>),
-    ImP(ReferenceInner<ExpressionId>),
+    CmP(PolynomialsInner<CommittedPolynomialId>),
+    ConstP(PolynomialsInner<ConstantPolynomialId>),
+    ImP(PolynomialsInner<ExpressionId>),
 }
 
 impl Polynomials {
@@ -334,7 +334,7 @@ impl Polynomials {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub struct ReferenceInner<Id> {
+pub struct PolynomialsInner<Id> {
     pub id: Id,
     pub pol_deg: Option<usize>,
     pub is_array: bool,
