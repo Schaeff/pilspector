@@ -117,6 +117,7 @@ pub fn eq_zero<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
 pub fn neq_zero<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     neq(expr, 0)
 }
+*/
 
 pub fn not<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     SMTExpr {
@@ -125,7 +126,7 @@ pub fn not<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     }
 }
 
-
+/*
 pub fn and<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::And,
@@ -330,7 +331,11 @@ impl SMTFormat for SMTExpr {
         match &self.op {
             SMTOp::Eq => {
                 assert!(self.args.len() == 2);
-                format!("(= {} {})", self.args[0].as_smt(), self.args[1].as_smt())
+                format!(
+                    "\n\t\t(= {} {})",
+                    self.args[0].as_smt(),
+                    self.args[1].as_smt()
+                )
             }
             SMTOp::Not => {
                 assert!(self.args.len() == 1);
