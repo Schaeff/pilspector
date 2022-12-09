@@ -1,6 +1,5 @@
 use clap::{Parser, Subcommand};
 
-use pilspector::ast::Pil;
 use pilspector::load_pil;
 use pilspector::smt_encoder::{known_constants, SmtPil};
 
