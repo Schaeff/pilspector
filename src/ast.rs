@@ -35,11 +35,11 @@ pub struct Pil {
 }
 
 pub trait ToPolynomial {
-    fn to_polynomial(&self, ctx: &Pil) -> Polynomial;
+    fn to_polynomial(&self, ctx: &Pil) -> ShiftedPolynomial;
 }
 
 impl ToPolynomial for Cm {
-    fn to_polynomial(&self, ctx: &Pil) -> Polynomial {
+    fn to_polynomial(&self, ctx: &Pil) -> ShiftedPolynomial {
         let (key, r) = ctx
             .references
             .iter()
@@ -55,13 +55,13 @@ impl ToPolynomial for Cm {
         Polynomial {
             key: key.clone(),
             index: r.len.map(|_| self.id.0 - r.id.0),
-            next: self.next,
         }
+        .with_next(self.next)
     }
 }
 
 impl ToPolynomial for Const {
-    fn to_polynomial(&self, ctx: &Pil) -> Polynomial {
+    fn to_polynomial(&self, ctx: &Pil) -> ShiftedPolynomial {
         let (key, r) = ctx
             .references
             .iter()
@@ -77,13 +77,13 @@ impl ToPolynomial for Const {
         Polynomial {
             key: key.clone(),
             index: r.len.map(|_| self.id.0 - r.id.0),
-            next: self.next,
         }
+        .with_next(self.next)
     }
 }
 
 impl ToPolynomial for Exp {
-    fn to_polynomial(&self, ctx: &Pil) -> Polynomial {
+    fn to_polynomial(&self, ctx: &Pil) -> ShiftedPolynomial {
         let (key, r) = ctx
             .references
             .iter()
@@ -99,14 +99,14 @@ impl ToPolynomial for Exp {
         Polynomial {
             key: key.clone(),
             index: r.len.map(|_| self.id.0 - r.id.0),
-            next: self.next,
         }
+        .with_next(self.next)
     }
 }
 
 impl Pil {
     /// get all polynomials for a given name: all array accesses, with and without `next`
-    pub fn get_polynomials(&self, key: &Name) -> Vec<Polynomial> {
+    pub fn get_polynomials(&self, key: &Name) -> Vec<ShiftedPolynomial> {
         let r = &self.references[key];
 
         [false, true]
@@ -114,10 +114,10 @@ impl Pil {
             .flat_map(|next| match r.len() {
                 // generate `n` keys for arrays of size `n`
                 Some(len) => (0..len)
-                    .map(|index| Polynomial::array_element(key, index, *next))
+                    .map(|index| Polynomial::array_element(key, index).with_next(*next))
                     .collect(),
                 // generate 1 key for non-array polynomials
-                None => vec![Polynomial::basic(key, *next)],
+                None => vec![Polynomial::basic(key).with_next(*next)],
             })
             .collect()
     }
@@ -192,26 +192,45 @@ pub type PublicCellKey = String;
 pub type Name = String;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Polynomial {
-    key: Name,
-    index: Option<usize>,
+pub struct ShiftedPolynomial {
+    pol: Polynomial,
     next: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Polynomial {
+    key: Name,
+    index: Option<usize>,
+}
+
+impl From<Polynomial> for ShiftedPolynomial {
+    fn from(pol: Polynomial) -> Self {
+        ShiftedPolynomial { pol, next: false }
+    }
+}
+
 impl Polynomial {
-    pub fn basic(key: &Name, next: bool) -> Self {
+    pub fn next(self) -> ShiftedPolynomial {
+        self.with_next(true)
+    }
+
+    pub fn with_next(self, next: bool) -> ShiftedPolynomial {
+        ShiftedPolynomial { pol: self, next }
+    }
+}
+
+impl Polynomial {
+    pub fn basic(key: &Name) -> Self {
         Self {
             key: key.clone(),
             index: None,
-            next,
         }
     }
 
-    pub fn array_element(key: &Name, index: usize, next: bool) -> Self {
+    pub fn array_element(key: &Name, index: usize) -> Self {
         Self {
             key: key.clone(),
             index: Some(index),
-            next,
         }
     }
 
@@ -224,14 +243,21 @@ impl Polynomial {
     }
 }
 
+impl fmt::Display for ShiftedPolynomial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.pol)?;
+        if self.next {
+            write!(f, "'")?;
+        }
+        Ok(())
+    }
+}
+
 impl fmt::Display for Polynomial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.key)?;
         if let Some(index) = self.index {
             write!(f, "[{}]", index)?;
-        }
-        if self.next {
-            write!(f, "'")?;
         }
         Ok(())
     }

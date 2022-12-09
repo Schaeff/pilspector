@@ -159,7 +159,7 @@ pub trait Visitor: Sized {
         visit_reference_key(self, c, ctx)
     }
 
-    fn visit_polynomial(&mut self, c: &Polynomial, ctx: &Pil) -> Result<Self::Error> {
+    fn visit_polynomial(&mut self, c: &ShiftedPolynomial, ctx: &Pil) -> Result<Self::Error> {
         visit_polynomial(self, c, ctx)
     }
 
@@ -377,7 +377,7 @@ pub fn visit_const<V: Visitor>(v: &mut V, c: &Const, ctx: &Pil) -> Result<V::Err
     v.visit_polynomial(&pol, ctx)
 }
 
-pub fn visit_polynomial<V: Visitor>(_: &mut V, _: &Polynomial, _: &Pil) -> Result<V::Error> {
+pub fn visit_polynomial<V: Visitor>(_: &mut V, _: &ShiftedPolynomial, _: &Pil) -> Result<V::Error> {
     Ok(())
 }
 pub fn visit_expression_id<V: Visitor>(

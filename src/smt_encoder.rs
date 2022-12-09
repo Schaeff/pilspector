@@ -192,7 +192,7 @@ impl fmt::Display for SmtPil {
 }
 
 struct VariableCollector {
-    vars: BTreeSet<Polynomial>,
+    vars: BTreeSet<ShiftedPolynomial>,
 }
 
 impl VariableCollector {
@@ -234,7 +234,7 @@ fn escape_identifier(input: &str) -> String {
 
 // Some helpers.
 impl SmtEncoder {
-    fn pol_to_smt_var(&self, pol: &Polynomial, suffix: Option<String>) -> SMTVariable {
+    fn pol_to_smt_var(&self, pol: &ShiftedPolynomial, suffix: Option<String>) -> SMTVariable {
         let mut key = escape_identifier(&pol.to_string());
         if suffix.is_some() {
             key = format!("{}_{}", key, suffix.unwrap());
@@ -254,7 +254,7 @@ impl SmtEncoder {
         SMTFunction::new(format!("constr_{}", constr_idx), SMTSort::Bool, smt_vars)
     }
 
-    fn all_vars_from_pol(&self, pol: &Polynomial) -> Vec<SMTVariable> {
+    fn all_vars_from_pol(&self, pol: &ShiftedPolynomial) -> Vec<SMTVariable> {
         (0..=2)
             .map(|row| self.pol_to_smt_var(pol, Some(format!("row{}", row))))
             .collect()
@@ -317,7 +317,7 @@ impl Visitor for SmtEncoder {
             // we already defined them in define_constants
             if !self.constants.iter().any(|(name, _)| {
                 // the polynomials in RANGE are not arrays
-                Polynomial::basic(name, false) == pol
+                Polynomial::basic(name).with_next(false) == pol
             }) {
                 self.all_vars_from_pol(&pol)
                     .into_iter()
@@ -413,7 +413,7 @@ impl Visitor for SmtEncoder {
                         let lookup_name = self
                             .constants
                             .iter()
-                            .find(|(name, _)| lookup == Polynomial::basic(name, false))
+                            .find(|(name, _)| lookup == Polynomial::basic(name).with_next(false))
                             .unwrap_or_else(|| panic!("const {} in plookup is not known", lookup))
                             .0;
                         escape_identifier(lookup_name)

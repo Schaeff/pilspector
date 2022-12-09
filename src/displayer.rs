@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         Add, Cm, ConnectionIdentity, Mul, Name, Number, PermutationIdentity, Pil, PlookupIdentity,
-        PolIdentity, Polynomial, Polynomials, PublicCell, Sub,
+        PolIdentity, Polynomials, PublicCell, ShiftedPolynomial, Sub,
     },
     visitor::*,
 };
@@ -106,7 +106,7 @@ impl Visitor for PilDisplayer {
         write!(self.f, " == 0")
     }
 
-    fn visit_polynomial(&mut self, c: &Polynomial, _: &Pil) -> Result<Self::Error> {
+    fn visit_polynomial(&mut self, c: &ShiftedPolynomial, _: &Pil) -> Result<Self::Error> {
         write!(self.f, "{}", c)
     }
 
