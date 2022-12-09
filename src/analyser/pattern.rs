@@ -418,12 +418,12 @@ namespace Pattern(%N);
         ];
 
         let fails = vec![
-            // r#"
-            // namespace SM0(%N);
-            //     pol commit a;
-            //     pol constant b;
-            //     (a' + b') * (a + b) = 1;
-            // "#,
+            r#"
+            namespace SM0(%N);
+                pol commit a;
+                pol constant b;
+                (a' + b') * (a + b) = 1;
+            "#,
             r#"
             namespace SM1(%N);
                 pol commit a;
