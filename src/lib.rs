@@ -11,14 +11,14 @@ mod visitor;
 
 /// compile a string with pilcom
 pub fn pilcom_from_str(source: &str) -> Result<String, String> {
-    use std::{path::PathBuf, process::Command};
+    use std::process::Command;
 
     let dir = tempdir::TempDir::new("pil_input").unwrap();
     let f = dir.path().join("input.pil");
-    std::fs::write(f.clone(), source);
+    std::fs::write(f.clone(), source).unwrap();
 
     let dir = tempdir::TempDir::new("pil_output").unwrap();
-    std::fs::create_dir_all(dir.path().join(f.clone().parent().unwrap())).unwrap();
+    std::fs::create_dir_all(dir.path().join(f.parent().unwrap())).unwrap();
 
     let out_file = dir.path().join(f.clone()).with_extension("pil.json");
 

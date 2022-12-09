@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use crate::{
     ast::{
-        Add, Expression, ExpressionWrapper, Mul, Neg, Pil, PolIdentity, ShiftedPolynomial, Sub,
-        ToPolynomial, ToStringWithContext, Cm, Exp, Const,
+        Add, Cm, Const, Exp, Expression, ExpressionWrapper, Mul, Neg, Pil, PolIdentity,
+        ShiftedPolynomial, Sub, ToPolynomial,
     },
     displayer::PilDisplayer,
-    pilcom_from_str,
-    visitor::Visitor, folder::Folder,
+    folder::Folder,
+    visitor::Visitor,
 };
 
 pub struct PatternDetector {
@@ -19,7 +19,7 @@ pub struct PatternDetector {
 
 impl PatternDetector {
     pub fn detect(pil: &Pil, pattern_pil: &Pil) -> String {
-        let expression = &pattern_pil.expressions[pattern_pil.pol_identities[0].e.0.clone()];
+        let expression = &pattern_pil.expressions[pattern_pil.pol_identities[0].e.0];
 
         let mut detector = PatternDetector {
             pattern: expression.clone(),
@@ -27,14 +27,14 @@ impl PatternDetector {
             pil: pil.clone(),
             pattern_pil: pattern_pil.clone(),
         };
-        detector.visit_pil(&pil).unwrap();
+        detector.visit_pil(pil).unwrap();
 
         detector
             .occurrences
             .iter()
             .map(|e| {
                 let mut displayer = PilDisplayer::default();
-                displayer.visit_expression(e, &pil).unwrap();
+                displayer.visit_expression(e, pil).unwrap();
                 String::from_utf8(displayer.f).unwrap()
             })
             .collect::<Vec<_>>()
@@ -75,13 +75,12 @@ impl Matches for Expression {
 
         match (self, pattern) {
             (e, Expression::Cm(cm)) => {
-                let pol = cm.inner.to_polynomial(&pattern_ctx);
+                let pol = cm.inner.to_polynomial(pattern_ctx);
                 let (res, to_insert) = match bindings.get(&pol) {
                     Some(bound_e) => (e == bound_e, vec![]),
                     None => {
-
                         // if this expression is already in the map, stop
-                        if bindings.values().find(|exp| *exp == e).is_some() {
+                        if bindings.values().any(|exp| exp == e) {
                             // println!("{} was already bound", e.to_string(ctx));
                             return (false, bindings);
                         }
@@ -90,16 +89,28 @@ impl Matches for Expression {
 
                         // if this symbolic variable isn't assigned, we only assign is if its other `next` can also be assigned
                         let other_e = if pol.next {
-                            RowShifter::previous(e.clone(), &ctx)
+                            RowShifter::previous(e.clone(), ctx)
                         } else {
-                            RowShifter::next(e.clone(), &ctx)
+                            RowShifter::next(e.clone(), ctx)
                         };
 
                         match other_e {
-                            Ok(other_e) => (true, vec![(ShiftedPolynomial {next: !pol.next, ..pol.clone()}, other_e), (pol, e.clone())]),
-                            Err(..) => (true, vec![])
+                            Ok(other_e) => (
+                                true,
+                                vec![
+                                    (
+                                        ShiftedPolynomial {
+                                            next: !pol.next,
+                                            ..pol.clone()
+                                        },
+                                        other_e,
+                                    ),
+                                    (pol, e.clone()),
+                                ],
+                            ),
+                            Err(..) => (true, vec![]),
                         }
-                    } 
+                    }
                 };
 
                 bindings.extend(to_insert);
@@ -119,7 +130,7 @@ impl Matches for Expression {
             }
             (Expression::Number(_), Expression::Number(_)) => (true, bindings),
             (Expression::Const(_), Expression::Const(_)) => (true, bindings),
-            (e, p) => {
+            (_e, _p) => {
                 // println!("failed to match {} to {}", e.to_string(ctx), p.to_string(pattern_ctx));
                 (false, bindings)
             }
@@ -254,7 +265,7 @@ impl RowShifter {
 impl Folder for RowShifter {
     type Error = ();
 
-    fn fold_cm(&mut self, cm: Cm, ctx: &Pil) -> Result<Cm, Self::Error> {
+    fn fold_cm(&mut self, cm: Cm, _ctx: &Pil) -> Result<Cm, Self::Error> {
         if self.forward == cm.next {
             Err(())
         } else {
@@ -265,7 +276,7 @@ impl Folder for RowShifter {
         }
     }
 
-    fn fold_const(&mut self, c: Const, ctx: &Pil) -> Result<Const, Self::Error> {
+    fn fold_const(&mut self, c: Const, _ctx: &Pil) -> Result<Const, Self::Error> {
         if self.forward == c.next {
             Err(())
         } else {
@@ -276,7 +287,7 @@ impl Folder for RowShifter {
         }
     }
 
-    fn fold_exp(&mut self, exp: Exp, ctx: &Pil) -> Result<Exp, Self::Error> {
+    fn fold_exp(&mut self, exp: Exp, _ctx: &Pil) -> Result<Exp, Self::Error> {
         if self.forward == exp.next {
             Err(())
         } else {
@@ -284,19 +295,28 @@ impl Folder for RowShifter {
                 next: self.forward,
                 ..exp
             })
-        }   
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
+    use crate::{pilcom, pilcom_from_str};
+
     use super::*;
 
     #[test]
     fn detect_pattern_in_binary() {
-        let pil_str = std::fs::read_to_string("binary.pil.json").unwrap();
-        let pil: Pil = serde_json::from_str(&pil_str).unwrap();
+        let pil: Pil = serde_json::from_str(&pilcom("binary.pil").unwrap()).unwrap();
 
-        println!("occurrences\n{}", &PatternDetector::detect(&pil));
+        let pattern = r#"
+        namespace Pattern(%N);
+            pol commit cIn, RESET, cOut;
+            cIn' * ( 1 - RESET' ) = cOut * ( 1 - RESET' );
+    "#;
+
+        let pattern: Pil = serde_json::from_str(&pilcom_from_str(pattern).unwrap()).unwrap();
+
+        println!("occurrences\n{}", &PatternDetector::detect(&pil, &pattern));
     }
 }
