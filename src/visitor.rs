@@ -155,23 +155,15 @@ pub trait Visitor: Sized {
         visit_number(self, c, ctx)
     }
 
-    fn visit_next(&mut self, next: &bool, ctx: &Pil) -> Result<Self::Error> {
-        visit_next(self, next, ctx)
-    }
-
-    fn visit_reference_key(&mut self, c: &ReferenceKey, ctx: &Pil) -> Result<Self::Error> {
+    fn visit_name(&mut self, c: &Name, ctx: &Pil) -> Result<Self::Error> {
         visit_reference_key(self, c, ctx)
     }
 
-    fn visit_indexed_reference_key(
-        &mut self,
-        c: &IndexedReferenceKey,
-        ctx: &Pil,
-    ) -> Result<Self::Error> {
-        visit_indexed_reference_key(self, c, ctx)
+    fn visit_polynomial(&mut self, c: &ShiftedPolynomial, ctx: &Pil) -> Result<Self::Error> {
+        visit_polynomial(self, c, ctx)
     }
 
-    fn visit_reference(&mut self, r: &Reference, ctx: &Pil) -> Result<Self::Error> {
+    fn visit_reference(&mut self, r: &Polynomials, ctx: &Pil) -> Result<Self::Error> {
         visit_reference(self, r, ctx)
     }
 
@@ -196,7 +188,7 @@ pub fn visit_pil<V: Visitor>(v: &mut V, p: &Pil) -> Result<V::Error> {
     }
 
     for (key, r) in &p.references {
-        v.visit_reference_key(key, ctx)?;
+        v.visit_name(key, ctx)?;
         v.visit_reference(r, ctx)?;
     }
 
@@ -368,34 +360,24 @@ pub fn visit_neg<V: Visitor>(v: &mut V, values: &Neg, ctx: &Pil) -> Result<V::Er
 }
 
 pub fn visit_cm<V: Visitor>(v: &mut V, cm: &Cm, ctx: &Pil) -> Result<V::Error> {
-    let (indexed_reference_key, reference_inner) = ctx.get_cm_reference(cm);
+    let pol = cm.to_polynomial(ctx);
 
-    v.visit_indexed_reference_key(&indexed_reference_key, ctx)?;
-    v.visit_reference_inner(reference_inner, ctx)?;
-    v.visit_next(&cm.next, ctx)
+    v.visit_polynomial(&pol, ctx)
 }
 
 pub fn visit_exp<V: Visitor>(v: &mut V, exp: &Exp, ctx: &Pil) -> Result<V::Error> {
-    let (indexed_reference_key, reference_inner) = ctx.get_exp_reference(exp);
+    let pol = exp.to_polynomial(ctx);
 
-    v.visit_indexed_reference_key(&indexed_reference_key, ctx)?;
-    v.visit_reference_inner(reference_inner, ctx)?;
-    v.visit_next(&exp.next, ctx)
+    v.visit_polynomial(&pol, ctx)
 }
 
 pub fn visit_const<V: Visitor>(v: &mut V, c: &Const, ctx: &Pil) -> Result<V::Error> {
-    let (indexed_reference_key, reference_inner) = ctx.get_const_reference(c);
+    let pol = c.to_polynomial(ctx);
 
-    v.visit_indexed_reference_key(&indexed_reference_key, ctx)?;
-    v.visit_reference_inner(reference_inner, ctx)?;
-    v.visit_next(&c.next, ctx)
+    v.visit_polynomial(&pol, ctx)
 }
 
-pub fn visit_indexed_reference_key<V: Visitor>(
-    _: &mut V,
-    _: &IndexedReferenceKey,
-    _: &Pil,
-) -> Result<V::Error> {
+pub fn visit_polynomial<V: Visitor>(_: &mut V, _: &ShiftedPolynomial, _: &Pil) -> Result<V::Error> {
     Ok(())
 }
 pub fn visit_expression_id<V: Visitor>(
@@ -410,27 +392,19 @@ pub fn visit_number<V: Visitor>(_v: &mut V, _c: &Number, _ctx: &Pil) -> Result<V
     Ok(())
 }
 
-pub fn visit_next<V: Visitor>(_v: &mut V, _c: &bool, _ctx: &Pil) -> Result<V::Error> {
+pub fn visit_reference_key<V: Visitor>(_v: &mut V, _c: &Name, _ctx: &Pil) -> Result<V::Error> {
     Ok(())
 }
 
-pub fn visit_reference_key<V: Visitor>(
-    _v: &mut V,
-    _c: &ReferenceKey,
-    _ctx: &Pil,
-) -> Result<V::Error> {
-    Ok(())
-}
-
-pub fn visit_reference<V: Visitor>(v: &mut V, r: &Reference, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_reference<V: Visitor>(v: &mut V, r: &Polynomials, ctx: &Pil) -> Result<V::Error> {
     match r {
-        Reference::CmP(i) => {
+        Polynomials::CmP(i) => {
             v.visit_reference_inner(i, ctx)?;
         }
-        Reference::ConstP(i) => {
+        Polynomials::ConstP(i) => {
             v.visit_reference_inner(i, ctx)?;
         }
-        Reference::ImP(i) => {
+        Polynomials::ImP(i) => {
             v.visit_reference_inner(i, ctx)?;
         }
     };

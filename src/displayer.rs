@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        Add, Cm, ConnectionIdentity, IndexedReferenceKey, Mul, Number, PermutationIdentity, Pil,
-        PlookupIdentity, PolIdentity, PublicCell, Reference, ReferenceKey, Sub,
+        Add, Cm, ConnectionIdentity, Mul, Name, Number, PermutationIdentity, Pil, PlookupIdentity,
+        PolIdentity, Polynomials, PublicCell, ShiftedPolynomial, Sub,
     },
     visitor::*,
 };
@@ -43,15 +43,15 @@ impl Visitor for PilDisplayer {
             write!(self.f, "pol")?;
 
             let size = match r {
-                Reference::CmP(r) => {
+                Polynomials::CmP(r) => {
                     write!(self.f, " commit")?;
                     r.len
                 }
-                Reference::ConstP(r) => {
+                Polynomials::ConstP(r) => {
                     write!(self.f, " constant")?;
                     r.len
                 }
-                Reference::ImP(r) => {
+                Polynomials::ImP(r) => {
                     write!(self.f, "")?;
                     r.len
                 }
@@ -65,7 +65,7 @@ impl Visitor for PilDisplayer {
                 write!(self.f, "[{}]", size)?;
             }
 
-            if let Reference::ImP(r) = r {
+            if let Polynomials::ImP(r) = r {
                 write!(self.f, " == ")?;
                 self.visit_expression(&p.expressions[r.id.0], ctx)?;
             }
@@ -106,11 +106,7 @@ impl Visitor for PilDisplayer {
         write!(self.f, " == 0")
     }
 
-    fn visit_indexed_reference_key(
-        &mut self,
-        c: &IndexedReferenceKey,
-        _: &Pil,
-    ) -> Result<Self::Error> {
+    fn visit_polynomial(&mut self, c: &ShiftedPolynomial, _: &Pil) -> Result<Self::Error> {
         write!(self.f, "{}", c)
     }
 
@@ -221,7 +217,7 @@ impl Visitor for PilDisplayer {
         Ok(())
     }
 
-    fn visit_reference_key(&mut self, c: &ReferenceKey, _ctx: &Pil) -> Result<Self::Error> {
+    fn visit_name(&mut self, c: &Name, _ctx: &Pil) -> Result<Self::Error> {
         write!(self.f, "{}", c)
     }
 
@@ -251,12 +247,5 @@ impl Visitor for PilDisplayer {
 
     fn visit_number(&mut self, c: &Number, _ctx: &Pil) -> Result<Self::Error> {
         write!(self.f, "{}", c.value)
-    }
-
-    fn visit_next(&mut self, next: &bool, _ctx: &Pil) -> Result<Self::Error> {
-        if *next {
-            write!(self.f, "'")?;
-        }
-        Ok(())
     }
 }

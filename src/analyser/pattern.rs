@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::{Expression, Pil, PolIdentity, IndexedReferenceKey, ExpressionWrapper, Add, Sub, Neg, Mul, ToStringWithContext},
+    ast::{
+        Add, Expression, ExpressionWrapper, Mul, Neg, Pil, PolIdentity, ShiftedPolynomial, Sub,
+        ToPolynomial, ToStringWithContext, Cm, Exp, Const,
+    },
     displayer::PilDisplayer,
-    visitor::{Result, Visitor}, pilcom_from_str,
+    pilcom_from_str,
+    visitor::Visitor, folder::Folder,
 };
 
 pub struct PatternDetector {
@@ -15,8 +19,7 @@ pub struct PatternDetector {
 
 impl PatternDetector {
     pub fn detect(pil: &Pil, pattern_pil: &Pil) -> String {
-
-        let expression = pattern_pil.get_expression(&pattern_pil.pol_identities[0].e);
+        let expression = &pattern_pil.expressions[pattern_pil.pol_identities[0].e.0.clone()];
 
         let mut detector = PatternDetector {
             pattern: expression.clone(),
@@ -39,46 +42,85 @@ impl PatternDetector {
     }
 
     fn matches(&self, e: &Expression) -> bool {
-        e.matches(&self.pattern, &self.pil, &self.pattern_pil, HashMap::default()).0
+        e.matches(
+            &self.pattern,
+            &self.pil,
+            &self.pattern_pil,
+            HashMap::default(),
+        )
+        .0
     }
 }
 
 trait Matches {
-    fn matches(&self, pattern: &Self, ctx: &Pil, pattern_ctx: &Pil, bindings: HashMap<IndexedReferenceKey, Expression>) -> (bool, HashMap<IndexedReferenceKey, Expression>);
+    fn matches(
+        &self,
+        pattern: &Self,
+        ctx: &Pil,
+        pattern_ctx: &Pil,
+        bindings: HashMap<ShiftedPolynomial, Expression>,
+    ) -> (bool, HashMap<ShiftedPolynomial, Expression>);
 }
 
 impl Matches for Expression {
-    fn matches(&self, pattern: &Expression, ctx: &Pil, pattern_ctx: &Pil, mut bindings: HashMap<IndexedReferenceKey, Expression>) -> (bool, HashMap<IndexedReferenceKey, Expression>) {      
-        println!("try match {} to {}", self.to_string(ctx), pattern.to_string(pattern_ctx));
-        println!("{}", bindings.iter().map(|(key, value)| format!("{} -> {}", key.to_string(), value.to_string(ctx))).collect::<Vec<_>>().join(", "));
-  
+    fn matches(
+        &self,
+        pattern: &Expression,
+        ctx: &Pil,
+        pattern_ctx: &Pil,
+        mut bindings: HashMap<ShiftedPolynomial, Expression>,
+    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        // println!("try match {} to {}", self.to_string(ctx), pattern.to_string(pattern_ctx));
+        // println!("{}", bindings.iter().map(|(key, value)| format!("{} -> {}", key.to_string(), value.to_string(ctx))).collect::<Vec<_>>().join(", "));
+
         match (self, pattern) {
             (e, Expression::Cm(cm)) => {
-                let pol = pattern_ctx.get_cm_reference(&cm.inner).0;
+                let pol = cm.inner.to_polynomial(&pattern_ctx);
                 let (res, to_insert) = match bindings.get(&pol) {
-                    Some(bound_e) => (e == bound_e, None),
-                    None => (true, Some(e))
+                    Some(bound_e) => (e == bound_e, vec![]),
+                    None => {
+
+                        // if this expression is already in the map, stop
+                        if bindings.values().find(|exp| *exp == e).is_some() {
+                            // println!("{} was already bound", e.to_string(ctx));
+                            return (false, bindings);
+                        }
+
+                        // println!("{} is not bound, try to bind it to {}", self.to_string(ctx), pattern.to_string(pattern_ctx));
+
+                        // if this symbolic variable isn't assigned, we only assign is if its other `next` can also be assigned
+                        let other_e = if pol.next {
+                            RowShifter::previous(e.clone(), &ctx)
+                        } else {
+                            RowShifter::next(e.clone(), &ctx)
+                        };
+
+                        match other_e {
+                            Ok(other_e) => (true, vec![(ShiftedPolynomial {next: !pol.next, ..pol.clone()}, other_e), (pol, e.clone())]),
+                            Err(..) => (true, vec![])
+                        }
+                    } 
                 };
 
-                bindings.extend(to_insert.map(|e| (pol, e.clone())));
+                bindings.extend(to_insert);
                 (res, bindings)
-            },
+            }
             (Expression::Add(left), Expression::Add(right)) => {
                 left.matches(right, ctx, pattern_ctx, bindings)
-            },
+            }
             (Expression::Sub(left), Expression::Sub(right)) => {
                 left.matches(right, ctx, pattern_ctx, bindings)
-            },
+            }
             (Expression::Neg(left), Expression::Neg(right)) => {
                 left.matches(right, ctx, pattern_ctx, bindings)
-            },
+            }
             (Expression::Mul(left), Expression::Mul(right)) => {
                 left.matches(right, ctx, pattern_ctx, bindings)
-            },
+            }
             (Expression::Number(_), Expression::Number(_)) => (true, bindings),
             (Expression::Const(_), Expression::Const(_)) => (true, bindings),
             (e, p) => {
-                println!("failed to match {} to {}", e.to_string(ctx), p.to_string(pattern_ctx));
+                // println!("failed to match {} to {}", e.to_string(ctx), p.to_string(pattern_ctx));
                 (false, bindings)
             }
         }
@@ -86,18 +128,33 @@ impl Matches for Expression {
 }
 
 impl<E: Matches> Matches for ExpressionWrapper<E> {
-    fn matches(&self, pattern: &Self, ctx: &Pil, pattern_ctx: &Pil, bindings: HashMap<IndexedReferenceKey, Expression>) -> (bool, HashMap<IndexedReferenceKey, Expression>) {
-        self.inner.matches(&pattern.inner, ctx, pattern_ctx, bindings)
+    fn matches(
+        &self,
+        pattern: &Self,
+        ctx: &Pil,
+        pattern_ctx: &Pil,
+        bindings: HashMap<ShiftedPolynomial, Expression>,
+    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        self.inner
+            .matches(&pattern.inner, ctx, pattern_ctx, bindings)
     }
 }
 
 impl Matches for Add {
-    fn matches(&self, pattern: &Self, ctx: &Pil, pattern_ctx: &Pil, bindings: HashMap<IndexedReferenceKey, Expression>) -> (bool, HashMap<IndexedReferenceKey, Expression>) {
-        let (left_match, bindings) = self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings);
+    fn matches(
+        &self,
+        pattern: &Self,
+        ctx: &Pil,
+        pattern_ctx: &Pil,
+        bindings: HashMap<ShiftedPolynomial, Expression>,
+    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        let (left_match, bindings) =
+            self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings);
         if !left_match {
-            let (left_match, bindings) = self.values[0].matches(&pattern.values[1], ctx, pattern_ctx, bindings);
+            let (left_match, bindings) =
+                self.values[0].matches(&pattern.values[1], ctx, pattern_ctx, bindings);
             if !left_match {
-                return (false, bindings)
+                return (false, bindings);
             }
             self.values[1].matches(&pattern.values[0], ctx, pattern_ctx, bindings)
         } else {
@@ -107,8 +164,15 @@ impl Matches for Add {
 }
 
 impl Matches for Sub {
-    fn matches(&self, pattern: &Self, ctx: &Pil, pattern_ctx: &Pil, bindings: HashMap<IndexedReferenceKey, Expression>) -> (bool, HashMap<IndexedReferenceKey, Expression>) {
-        let (left_match, bindings) = self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings);
+    fn matches(
+        &self,
+        pattern: &Self,
+        ctx: &Pil,
+        pattern_ctx: &Pil,
+        bindings: HashMap<ShiftedPolynomial, Expression>,
+    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        let (left_match, bindings) =
+            self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings);
         if !left_match {
             return (false, bindings);
         }
@@ -117,10 +181,18 @@ impl Matches for Sub {
 }
 
 impl Matches for Mul {
-    fn matches(&self, pattern: &Self, ctx: &Pil, pattern_ctx: &Pil, bindings: HashMap<IndexedReferenceKey, Expression>) -> (bool, HashMap<IndexedReferenceKey, Expression>) {
-        let (left_match, bindings) = self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings);
+    fn matches(
+        &self,
+        pattern: &Self,
+        ctx: &Pil,
+        pattern_ctx: &Pil,
+        bindings: HashMap<ShiftedPolynomial, Expression>,
+    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
+        let (left_match, bindings) =
+            self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings);
         if !left_match {
-            let (left_match, bindings) = self.values[0].matches(&pattern.values[1], ctx, pattern_ctx, bindings);
+            let (left_match, bindings) =
+                self.values[0].matches(&pattern.values[1], ctx, pattern_ctx, bindings);
             if !left_match {
                 return (false, bindings);
             }
@@ -132,7 +204,13 @@ impl Matches for Mul {
 }
 
 impl Matches for Neg {
-    fn matches(&self, pattern: &Self, ctx: &Pil, pattern_ctx: &Pil, bindings: HashMap<IndexedReferenceKey, Expression>) -> (bool, HashMap<IndexedReferenceKey, Expression>) {
+    fn matches(
+        &self,
+        pattern: &Self,
+        ctx: &Pil,
+        pattern_ctx: &Pil,
+        bindings: HashMap<ShiftedPolynomial, Expression>,
+    ) -> (bool, HashMap<ShiftedPolynomial, Expression>) {
         self.values[0].matches(&pattern.values[0], ctx, pattern_ctx, bindings)
     }
 }
@@ -140,14 +218,73 @@ impl Matches for Neg {
 impl Visitor for PatternDetector {
     type Error = String;
 
-    fn visit_polynomial_identity(&mut self, i: &PolIdentity, ctx: &Pil, _: usize) -> Result<Self::Error> {
-        let e = ctx.get_expression(&i.e);
+    fn visit_polynomial_identity(
+        &mut self,
+        i: &PolIdentity,
+        ctx: &Pil,
+        _: usize,
+    ) -> crate::visitor::Result<Self::Error> {
+        let e = &ctx.expressions[i.e.0];
 
         if self.matches(e) {
             self.occurrences.push(e.clone());
         }
 
         Ok(())
+    }
+}
+
+// a folder which tries to shift an expression forward or backwards
+// forward: a -> a' , a' -> error
+// backwards: a' -> a, a -> error
+struct RowShifter {
+    forward: bool,
+}
+
+impl RowShifter {
+    fn next(e: Expression, ctx: &Pil) -> Result<Expression, ()> {
+        RowShifter { forward: true }.fold_expression(e, ctx)
+    }
+
+    fn previous(e: Expression, ctx: &Pil) -> Result<Expression, ()> {
+        RowShifter { forward: false }.fold_expression(e, ctx)
+    }
+}
+
+impl Folder for RowShifter {
+    type Error = ();
+
+    fn fold_cm(&mut self, cm: Cm, ctx: &Pil) -> Result<Cm, Self::Error> {
+        if self.forward == cm.next {
+            Err(())
+        } else {
+            Ok(Cm {
+                next: self.forward,
+                ..cm
+            })
+        }
+    }
+
+    fn fold_const(&mut self, c: Const, ctx: &Pil) -> Result<Const, Self::Error> {
+        if self.forward == c.next {
+            Err(())
+        } else {
+            Ok(Const {
+                next: self.forward,
+                ..c
+            })
+        }
+    }
+
+    fn fold_exp(&mut self, exp: Exp, ctx: &Pil) -> Result<Exp, Self::Error> {
+        if self.forward == exp.next {
+            Err(())
+        } else {
+            Ok(Exp {
+                next: self.forward,
+                ..exp
+            })
+        }   
     }
 }
 

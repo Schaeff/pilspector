@@ -1,9 +1,9 @@
 use clap::{Parser, Subcommand};
 
-use pilspector::{analyser, pilcom_from_str};
 use pilspector::ast::Pil;
 use pilspector::load_pil;
 use pilspector::smt_encoder::{known_constants, SmtPil};
+use pilspector::{analyser, pilcom_from_str};
 
 #[derive(Debug, Parser)]
 #[clap(name = "Pilspector", version = env!("CARGO_PKG_VERSION"))]
@@ -44,10 +44,8 @@ fn main() {
 
             let pattern = r#"
                 namespace Pattern(%N);
-                    pol commit SET;
-                    pol commit freeIn;
-                    pol commit out;
-                    out' = SET*freeIn + (1 - SET)*(out + freeIn);
+                    pol commit cIn, RESET, cOut;
+                    cIn' * ( 1 - RESET' ) = cOut * ( 1 - RESET' );
             "#;
 
             let pattern: Pil = serde_json::from_str(&pilcom_from_str(pattern).unwrap()).unwrap();

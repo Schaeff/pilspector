@@ -3,6 +3,7 @@ use ast::Pil;
 pub mod ast;
 // mod constants;
 mod displayer;
+mod folder;
 mod smt;
 pub mod smt_encoder;
 mod validator;
@@ -41,7 +42,7 @@ pub fn pilcom(f: &str) -> Result<String, String> {
     let f = PathBuf::from(f);
 
     let dir = tempdir::TempDir::new("pil_output").unwrap();
-    std::fs::create_dir_all(dir.path().join(f.clone().parent().unwrap())).unwrap();
+    std::fs::create_dir_all(dir.path().join(f.parent().unwrap())).unwrap();
 
     let out_file = dir.path().join(f.clone()).with_extension("pil.json");
 

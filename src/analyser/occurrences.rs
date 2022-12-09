@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::{Cm, Pil, ReferenceKey},
+    ast::{Cm, Name, Pil, ToPolynomial},
     visitor::{Result, Visitor},
 };
 
 #[derive(Default)]
 pub struct OccurrenceCounter {
-    occurrences: HashMap<ReferenceKey, usize>,
+    occurrences: HashMap<Name, usize>,
 }
 
 impl OccurrenceCounter {
@@ -29,7 +29,7 @@ impl Visitor for OccurrenceCounter {
     fn visit_cm(&mut self, cm: &Cm, ctx: &Pil) -> Result<Self::Error> {
         *self
             .occurrences
-            .entry(ctx.get_cm_reference(cm).0.to_string())
+            .entry(cm.to_polynomial(ctx).to_string())
             .or_insert(0) += 1;
         Ok(())
     }
