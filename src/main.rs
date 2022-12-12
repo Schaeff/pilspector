@@ -77,7 +77,10 @@ fn main() {
             let smt_pil = SmtPil::new(pil, known_constants(), in_vars, out_vars);
             //println!("{}", smt_pil);
 
-            let (output, error) = solver::query_smt_with_solver(&format!("{}", smt_pil), solver::SolverConfig::new(&args.solver));
+            let (output, error) = solver::query_smt_with_solver(
+                &format!("{}", smt_pil),
+                solver::SolverConfig::new(&args.solver),
+            );
 
             if !output.is_empty() {
                 println!("\nOutput = {}", output);
