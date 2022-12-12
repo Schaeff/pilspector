@@ -394,11 +394,13 @@ impl SmtEncoder {
         collector.visit_pil(p).unwrap();
 
         // Make SMT vars for `pol commit` variables.
-        let smt_vars: Vec<_> = collector
-            .vars
-            .iter()
-            .map(|pol| self.pol_to_smt_var(pol, None))
-            .collect();
+        smt_vars.extend(
+            collector
+                .vars
+                .iter()
+                .map(|pol| self.pol_to_smt_var(pol, None))
+                .collect::<Vec<_>>(),
+        );
 
         // Declare the state machine's function.
         let state_machine_decl =
