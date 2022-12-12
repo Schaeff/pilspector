@@ -10,8 +10,8 @@ fn constant_lookup_function(name: String) -> SMTFunction {
     SMTFunction::new(name, SMTSort::Bool, vec![r, v])
 }
 
-fn escape_constant(name: String) -> String {
-    format!("const_{}", escape_identifier(&name))
+fn constant_function_name(poly: Polynomial) -> String {
+    format!("const_{}", escape_identifier(&poly.to_string()))
 }
 
 #[derive(Debug, Clone)]
@@ -24,13 +24,13 @@ pub struct LookupConstants {
     /// is equal to `v`.
     /// The lookup (e1, e2, ..., en) in (l1, l2, ..., ln) is translated to
     /// (exists ((row Int)) (and (l1 row e1) (l2 row e2) ... (ln row e2)))
-    constants: BTreeMap<String, SMTStatement>,
+    constants: BTreeMap<Polynomial, SMTStatement>,
     /// Specializations for full lookups, i.e. those cannot be combined and only applied
     /// if the constants on the right hand side of a lookup exactly match the key in this map.
     /// The expression is the body of an SMT function of the form
     /// (define-fun <lookup name> ((e1 Int) (e2 Int) ... (en Int)) Bool ...)
     /// that return true if and only if the expressions (e1, e2, ..., en) are in the lookup.
-    shortcuts: BTreeMap<Vec<String>, (SMTFunction, SMTExpr)>,
+    shortcuts: BTreeMap<Vec<Polynomial>, (SMTFunction, SMTExpr)>,
 }
 
 impl Default for LookupConstants {
@@ -46,22 +46,25 @@ impl LookupConstants {
             shortcuts: known_shortcut_lookups(),
         }
     }
-    pub fn known_lookup_constant(&self, lookup: &ShiftedPolynomial) -> Option<String> {
-        self.constants
-            .iter()
-            .find(|(name, _)| *lookup == Polynomial::basic(name).with_next(false))
-            .map(|(name, _)| name.clone())
+
+    /// @returns true iff we know this constant. Returns false if "next" is set to true.
+    pub fn is_known_constant(&self, lookup: &ShiftedPolynomial) -> bool {
+        self.known_lookup_constant(lookup).is_some()
     }
 
-    pub fn known_lookup_constant_escaped(&self, lookup: &ShiftedPolynomial) -> Option<String> {
-        self.known_lookup_constant(lookup).map(escape_constant)
+    fn known_lookup_constant(&self, lookup: &ShiftedPolynomial) -> Option<Polynomial> {
+        self.constants
+            .iter()
+            .find(|&(p, _)| p.clone().with_next(false) == *lookup)
+            .map(|(p, _)| p.clone())
     }
 
     pub fn known_lookup_constant_as_function(
         &self,
         lookup: &ShiftedPolynomial,
     ) -> Option<SMTFunction> {
-        self.known_lookup_constant_escaped(lookup)
+        self.known_lookup_constant(lookup)
+            .map(constant_function_name)
             .map(constant_lookup_function)
     }
 
@@ -75,8 +78,8 @@ impl LookupConstants {
             uf(shortcut.clone(), lhs)
         } else {
             println!(
-                "; No specialized lookup found for combination {} - will need to use quantifiers.",
-                constants.join(", ")
+                "; No specialized lookup found for combination {:?} - will need to use quantifiers.",
+                constants
             );
             let row = SMTVariable::new("row".to_string(), SMTSort::Int);
             exists(
@@ -86,9 +89,7 @@ impl LookupConstants {
                         .zip(rhs.iter())
                         .map(|(expr, constant)| {
                             uf(
-                                constant_lookup_function(
-                                    self.known_lookup_constant_escaped(constant).unwrap(),
-                                ),
+                                self.known_lookup_constant_as_function(constant).unwrap(),
                                 vec![row.clone().into(), expr],
                             )
                         })
@@ -111,17 +112,15 @@ impl LookupConstants {
     }
 }
 
-fn add_constant(result: &mut BTreeMap<String, SMTStatement>, name: &str, body: SMTExpr) {
+fn add_constant(result: &mut BTreeMap<Polynomial, SMTStatement>, name: &str, body: SMTExpr) {
+    let poly = Polynomial::basic(&name.to_string());
     result.insert(
-        name.to_string(),
-        define_fun(
-            constant_lookup_function(escape_constant(name.to_string())),
-            body,
-        ),
+        poly.clone(),
+        define_fun(constant_lookup_function(constant_function_name(poly)), body),
     );
 }
 
-fn known_constants() -> BTreeMap<String, SMTStatement> {
+fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     let mut result = BTreeMap::new();
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
     let v = SMTVariable::new("v".to_string(), SMTSort::Int);
@@ -260,13 +259,13 @@ fn known_constants() -> BTreeMap<String, SMTStatement> {
     result
 }
 
-fn known_shortcut_lookups() -> BTreeMap<Vec<String>, (SMTFunction, SMTExpr)> {
+fn known_shortcut_lookups() -> BTreeMap<Vec<Polynomial>, (SMTFunction, SMTExpr)> {
     let mut result = BTreeMap::new();
     let a = SMTVariable::new("a".to_string(), SMTSort::Int);
     let b = SMTVariable::new("b".to_string(), SMTSort::Int);
     let c = SMTVariable::new("c".to_string(), SMTSort::Int);
     result.insert(
-        vec!["Global.BYTE2".to_string()],
+        vec![Polynomial::basic(&"Global.BYTE2".to_string())],
         (
             SMTFunction::new(
                 "Global_BYTE2_isolated".to_string(),
@@ -277,7 +276,7 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<String>, (SMTFunction, SMTExpr)> {
         ),
     );
     result.insert(
-        vec!["Global.BYTE".to_string()],
+        vec![Polynomial::basic(&"Global.BYTE".to_string())],
         (
             SMTFunction::new(
                 "Global_BYTE_isolated".to_string(),
@@ -289,8 +288,8 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<String>, (SMTFunction, SMTExpr)> {
     );
     result.insert(
         vec![
-            "Arith.SEL_BYTE2_BIT19".to_string(),
-            "Arith.BYTE2_BIT19".to_string(),
+            Polynomial::basic(&"Arith.SEL_BYTE2_BIT19".to_string()),
+            Polynomial::basic(&"Arith.BYTE2_BIT19".to_string()),
         ],
         (
             SMTFunction::new(
@@ -314,7 +313,7 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<String>, (SMTFunction, SMTExpr)> {
         ),
     );
     result.insert(
-        vec!["Arith.GL_SIGNED_18BITS".to_string()],
+        vec![Polynomial::basic(&"Arith.GL_SIGNED_18BITS".to_string())],
         (
             SMTFunction::new(
                 "Arith_GL_SIGNED_18BITS_isolated".to_string(),
@@ -329,9 +328,9 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<String>, (SMTFunction, SMTExpr)> {
     );
     result.insert(
         vec![
-            "Arith.GL_SIGNED_4BITS_C0".to_string(),
-            "Arith.GL_SIGNED_4BITS_C1".to_string(),
-            "Arith.GL_SIGNED_4BITS_C2".to_string(),
+            Polynomial::basic(&"Arith.GL_SIGNED_4BITS_C0".to_string()),
+            Polynomial::basic(&"Arith.GL_SIGNED_4BITS_C1".to_string()),
+            Polynomial::basic(&"Arith.GL_SIGNED_4BITS_C2".to_string()),
         ],
         (
             SMTFunction::new(

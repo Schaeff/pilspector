@@ -195,7 +195,7 @@ impl SmtEncoder {
             const_collector
                 .consts
                 .iter()
-                .partition(|c| self.lookup_constants.known_lookup_constant(c).is_some());
+                .partition(|c| self.lookup_constants.is_known_constant(c));
 
         let smt_row_arg = SMTVariable::new("row".to_string(), SMTSort::Int);
         // Add `row` to the state machine input.
@@ -462,11 +462,7 @@ impl Visitor for SmtEncoder {
                 .map(|lookup| match &ctx.expressions[lookup.0] {
                     Expression::Const(w) => {
                         let lookup = w.inner.to_polynomial(ctx);
-                        if self
-                            .lookup_constants
-                            .known_lookup_constant_escaped(&lookup)
-                            .is_none()
-                        {
+                        if !self.lookup_constants.is_known_constant(&lookup) {
                             panic!("const {} in plookup is not known", lookup);
                         }
                         lookup
