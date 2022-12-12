@@ -84,6 +84,7 @@ pub enum SMTOp {
     Sub,
     Mul,
     Div,
+    Mod,
     Lt,
     Le,
     Gt,
@@ -212,7 +213,6 @@ pub fn mul<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
-/*
 pub fn div<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Div,
@@ -220,6 +220,14 @@ pub fn div<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
+pub fn modulo<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
+    SMTExpr {
+        op: SMTOp::Mod,
+        args: vec![lhs.into(), rhs.into()],
+    }
+}
+
+/*
 pub fn lt<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Lt,
@@ -377,6 +385,10 @@ impl SMTFormat for SMTExpr {
             SMTOp::Div => {
                 assert!(self.args.len() == 2);
                 format!("(/ {} {})", self.args[0].as_smt(), self.args[1].as_smt())
+            }
+            SMTOp::Mod => {
+                assert!(self.args.len() == 2);
+                format!("(mod {} {})", self.args[0].as_smt(), self.args[1].as_smt())
             }
             SMTOp::Lt => {
                 assert!(self.args.len() == 2);

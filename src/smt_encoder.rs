@@ -42,6 +42,76 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
             ]),
         ),
     );
+
+    result.insert(
+        "Binary.P_LAST".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_LAST".to_string()),
+            eq(v.clone(), modulo(div(r.clone(), 131072 /* 256 * 256 * 2 */ ), 2))
+        ),
+    );
+
+    result.insert(
+        "Binary.P_OPCODE".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_OPCODE".to_string()),
+            eq(v.clone(), div(r.clone(), 262144 /* 256 * 256 * 2 * 2*/ ))
+        ),
+    );
+
+    result.insert(
+        "Binary.P_A".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_A".to_string()),
+            eq(v.clone(), modulo(div(r.clone(), 256), 256))
+        ),
+    );
+
+    // TODO
+    result.insert(
+        "Binary.P_B".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_B".to_string()),
+            literal_true()
+        ),
+    );
+
+    // TODO
+    result.insert(
+        "Binary.P_C".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_C".to_string()),
+            literal_true()
+        ),
+    );
+
+    // TODO
+    result.insert(
+        "Binary.P_CIN".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_CIN".to_string()),
+            literal_true()
+        ),
+    );
+
+    // TODO
+    result.insert(
+        "Binary.P_COUT".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_COUT".to_string()),
+            literal_true()
+        ),
+    );
+
+    // TODO
+    result.insert(
+        "Binary.P_USE_CARRY".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_USE_CARRY".to_string()),
+            literal_true()
+        ),
+    );
+
     result.insert(
         "Arith.SEL_BYTE2_BIT19".to_string(),
         define_fun(
@@ -211,8 +281,6 @@ impl fmt::Display for SmtPil {
                 .collect::<Vec<_>>()
                 .join("\n")
         )?;
-
-        writeln!(f, "(check-sat)\n(get-model)")?;
 
         Ok(())
     }

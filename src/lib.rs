@@ -5,6 +5,7 @@ pub mod ast;
 mod displayer;
 mod smt;
 pub mod smt_encoder;
+pub mod solver;
 mod validator;
 mod visitor;
 
