@@ -165,14 +165,29 @@ impl SmtEncoder {
     }
 
     fn encode_state_machine(&mut self, p: &Pil, rows: usize) {
-        // Collect only constants that appear in constraints.
+        // Collect only constants that appear in constraints or
+        // LHS of plookups.
         // Constants that appear only in the RHS of a lookup
         // do not need to be a parameter in the state machine.
         let mut const_collector = VariableCollector::new();
         self.fun_constraints.values().for_each(|constr| {
-            if let Constraint::Identity(i) = constr {
-                // The index 0 below is not used in the visitor.
-                const_collector.visit_polynomial_identity(i, p, 0).unwrap();
+            match constr {
+                Constraint::Identity(i) => {
+                    // The index 0 below is not used in the visitor.
+                    const_collector.visit_polynomial_identity(i, p, 0).unwrap();
+                }
+                Constraint::Lookup(PlookupIdentity {
+                    f,
+                    sel_f: None,
+                    sel_t: None,
+                    ..
+                }) => {
+                    // The "index" parameter is unused.
+                    for e in f {
+                        const_collector.visit_expression_id(e, p).unwrap();
+                    }
+                }
+                _ => panic!(),
             }
         });
         // Add `row` to the state machine input.
@@ -439,6 +454,7 @@ impl Visitor for SmtEncoder {
         let parameters: Vec<_> = collector
             .vars
             .iter()
+            .chain(collector.consts.iter())
             .map(|pol| self.pol_to_smt_var(pol, None))
             .collect();
         let lookup_function =
