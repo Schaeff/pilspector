@@ -197,6 +197,16 @@ pub struct ShiftedPolynomial {
     next: bool,
 }
 
+impl ShiftedPolynomial {
+    // shift this polynomial if it's not already shifted
+    pub fn next(&self) -> Option<Self> {
+        (!self.next).then(|| Self {
+            next: true,
+            ..self.clone()
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Polynomial {
     key: Name,

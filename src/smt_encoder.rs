@@ -42,6 +42,79 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
             ]),
         ),
     );
+
+    result.insert(
+        "Binary.P_LAST".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_LAST".to_string()),
+            eq(
+                v.clone(),
+                modulo(div(r.clone(), 131072 /* 256 * 256 * 2 */), 2),
+            ),
+        ),
+    );
+
+    result.insert(
+        "Binary.P_OPCODE".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_OPCODE".to_string()),
+            eq(v.clone(), div(r.clone(), 262144 /* 256 * 256 * 2 * 2*/)),
+        ),
+    );
+
+    result.insert(
+        "Binary.P_A".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_A".to_string()),
+            eq(v.clone(), modulo(div(r.clone(), 256), 256)),
+        ),
+    );
+
+    // TODO
+    result.insert(
+        "Binary.P_B".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_B".to_string()),
+            literal_true(),
+        ),
+    );
+
+    // TODO
+    result.insert(
+        "Binary.P_C".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_C".to_string()),
+            literal_true(),
+        ),
+    );
+
+    // TODO
+    result.insert(
+        "Binary.P_CIN".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_CIN".to_string()),
+            literal_true(),
+        ),
+    );
+
+    // TODO
+    result.insert(
+        "Binary.P_COUT".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_COUT".to_string()),
+            literal_true(),
+        ),
+    );
+
+    // TODO
+    result.insert(
+        "Binary.P_USE_CARRY".to_string(),
+        define_fun(
+            constant_lookup_function("Binary_P_USE_CARRY".to_string()),
+            literal_true(),
+        ),
+    );
+
     result.insert(
         "Arith.SEL_BYTE2_BIT19".to_string(),
         define_fun(
@@ -140,23 +213,47 @@ pub struct SmtPil {
     /// that return true if and only if the constant value in row `row`
     /// is equal to `v`.
     constants: BTreeMap<String, SMTStatement>,
+    in_vars: BTreeSet<String>,
+    out_vars: BTreeSet<String>,
 }
 
 impl SmtPil {
-    pub fn new(pil: Pil, constants: BTreeMap<String, SMTStatement>) -> Self {
-        Self { pil, constants }
+    pub fn new(
+        pil: Pil,
+        constants: BTreeMap<String, SMTStatement>,
+        in_vars: BTreeSet<String>,
+        out_vars: BTreeSet<String>,
+    ) -> Self {
+        Self {
+            pil,
+            constants,
+            in_vars,
+            out_vars,
+        }
     }
+}
+
+enum Constraint {
+    Identity(PolIdentity),
+    Lookup(PlookupIdentity),
 }
 
 pub struct SmtEncoder {
     pub smt: Vec<SMTStatement>,
     funs: Vec<SMTFunction>,
+    fun_constraints: BTreeMap<String, Constraint>,
     constants: BTreeMap<String, SMTStatement>,
+    in_vars: BTreeSet<String>,
+    out_vars: BTreeSet<String>,
 }
 
 impl SmtEncoder {
     fn out(&mut self, statement: SMTStatement) {
         self.smt.push(statement);
+    }
+
+    fn out_vec(&mut self, statements: Vec<SMTStatement>) {
+        self.smt.extend(statements);
     }
 }
 
@@ -165,7 +262,10 @@ impl fmt::Display for SmtPil {
         let mut encoder = SmtEncoder {
             smt: Vec::default(),
             funs: Vec::default(),
+            fun_constraints: BTreeMap::default(),
             constants: self.constants.clone(),
+            in_vars: self.in_vars.clone(),
+            out_vars: self.out_vars.clone(),
         };
         encoder.define_constants();
         encoder.visit_pil(&self.pil)?;
@@ -185,20 +285,20 @@ impl fmt::Display for SmtPil {
                 .join("\n")
         )?;
 
-        writeln!(f, "(check-sat)\n(get-model)")?;
-
         Ok(())
     }
 }
 
 struct VariableCollector {
     vars: BTreeSet<ShiftedPolynomial>,
+    consts: BTreeSet<ShiftedPolynomial>,
 }
 
 impl VariableCollector {
     fn new() -> Self {
         Self {
             vars: BTreeSet::default(),
+            consts: BTreeSet::default(),
         }
     }
 }
@@ -220,7 +320,7 @@ impl Visitor for VariableCollector {
 
     fn visit_const(&mut self, c: &Const, ctx: &Pil) -> Result<Self::Error> {
         let pol = c.to_polynomial(ctx);
-        self.vars.insert(pol);
+        self.consts.insert(pol);
         Ok(())
     }
 }
@@ -246,18 +346,14 @@ impl SmtEncoder {
         let mut collector = VariableCollector::new();
         let constr = &ctx.expressions[i.e.0];
         collector.visit_expression(constr, ctx).unwrap();
+
         let smt_vars: Vec<_> = collector
-            .vars
+            .consts
             .iter()
+            .chain(collector.vars.iter())
             .map(|pol| self.pol_to_smt_var(pol, None))
             .collect();
         SMTFunction::new(format!("constr_{}", constr_idx), SMTSort::Bool, smt_vars)
-    }
-
-    fn all_vars_from_pol(&self, pol: &ShiftedPolynomial) -> Vec<SMTVariable> {
-        (0..=2)
-            .map(|row| self.pol_to_smt_var(pol, Some(format!("row{}", row))))
-            .collect()
     }
 
     fn define_constants(&mut self) {
@@ -271,15 +367,47 @@ impl SmtEncoder {
         }
     }
 
-    fn encode_state_machine(&self, p: &Pil) -> SMTStatement {
+    fn encode_state_machine(&mut self, p: &Pil, rows: usize) {
+        // Collect only constants that appear in constraints.
+        // Constants that appear only in the RHS of a lookup
+        // do not need to be a parameter in the state machine.
+        let mut const_collector = VariableCollector::new();
+        self.fun_constraints.values().for_each(|constr| {
+            if let Constraint::Identity(i) = constr {
+                // The index 0 below is not used in the visitor.
+                const_collector.visit_polynomial_identity(i, p, 0).unwrap();
+            }
+        });
+        // Add `row` to the state machine input.
+        let mut smt_vars: Vec<_> = vec![SMTVariable::new("row".to_string(), SMTSort::Int)];
+        // Make SMT vars for the constants.
+        smt_vars.extend(
+            const_collector
+                .consts
+                .iter()
+                .map(|pol| self.pol_to_smt_var(pol, None))
+                .collect::<Vec<_>>(),
+        );
+
+        // Collect `pol commit` variables.
         let mut collector = VariableCollector::new();
         collector.visit_pil(p).unwrap();
-        let smt_vars: Vec<_> = collector
-            .vars
-            .iter()
-            .map(|pol| self.pol_to_smt_var(pol, None))
-            .collect();
 
+        // Make SMT vars for `pol commit` variables.
+        smt_vars.extend(
+            collector
+                .vars
+                .iter()
+                .map(|pol| self.pol_to_smt_var(pol, None))
+                .collect::<Vec<_>>(),
+        );
+
+        // Declare the state machine's function.
+        let state_machine_decl =
+            SMTFunction::new("state_machine".to_string(), SMTSort::Bool, smt_vars);
+        // Add the UF application of every constraint to the body of the state machine.
+        // This includes constraints and lookups.
+        // TODO add constraints for the constants that are used in identities.
         let body = and_vec(
             self.funs
                 .iter()
@@ -287,10 +415,121 @@ impl SmtEncoder {
                 .collect::<Vec<_>>(),
         );
 
-        define_fun(
-            SMTFunction::new("state_machine".to_string(), SMTSort::Bool, smt_vars),
-            body,
-        )
+        self.out(define_fun(state_machine_decl.clone(), body));
+
+        // Create the main query.
+
+        let mut decls: BTreeSet<SMTVariable> = BTreeSet::default();
+        let mut appls: Vec<SMTExpr> = vec![];
+        let mut rows_constrs: Vec<SMTExpr> = vec![];
+        let mut next_constrs: Vec<SMTExpr> = vec![];
+
+        let all_vars = [
+            const_collector.consts.iter().collect::<Vec<_>>(),
+            collector.vars.iter().collect::<Vec<_>>(),
+        ]
+        .concat();
+
+        // Unroll the state machine `rows` times
+        // state_machine(row_i, input_row_i, out_row_i, out_next_row_i)
+        (0..rows).for_each(|row| {
+            // Create a `row` variable for each row.
+            let smt_row = SMTVariable::new(format!("row{}", row), SMTSort::Int);
+
+            // For every sequential pair of rows,
+            // add the constraint `(= row (+ prev_row 1))`.
+            if row > 0 {
+                let smt_prev_row = SMTVariable::new(format!("row{}", row - 1), SMTSort::Int);
+                rows_constrs.push(eq(smt_row.clone(), add(smt_prev_row, 1)));
+            }
+
+            // Do that for two executions that act on the same inputs
+            // but on different syntactic outputs, so that at the end
+            // we can query whether they can be different.
+            // state_machine(row_i, input_row_i_exec_0, out_row_i_exec_0, out_next_row_i_exec_0)
+            // state_machine(row_i, input_row_i_exec_1, out_row_i_exec_1, out_next_row_i_exec_1)
+            (0..=1).for_each(|exec| {
+                // Create the state machine arguments
+                let mut inner_decls: BTreeSet<SMTVariable> = BTreeSet::default();
+
+                // Add row to the state machine arguments
+                inner_decls.insert(smt_row.clone());
+
+                all_vars.iter().for_each(|pol| {
+                    // Create and declare the variable for this row and execution.
+                    let smt_var =
+                        self.pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec)));
+                    inner_decls.insert(smt_var.clone());
+
+                    // Bind `var` and `next_var` in two sequential rows in the same execution.
+                    if row > 0 {
+                        if let Some(ref pol_next) = pol.next() {
+                            let prev_smt_var = self.pol_to_smt_var(
+                                pol_next,
+                                Some(format!("_row{}_exec{}", row - 1, exec)),
+                            );
+                            decls.insert(prev_smt_var.clone());
+                            next_constrs.push(eq(smt_var.clone(), prev_smt_var));
+                        }
+                    }
+
+                    // Bind two input variables of same row and different execution.
+                    if exec > 0
+                        && self
+                            .in_vars
+                            .get(&self.pol_to_smt_var(pol, None).name)
+                            .is_some()
+                    {
+                        let other_exec_smt_var =
+                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec - 1)));
+                        assert!(decls.get(&other_exec_smt_var).is_some());
+                        next_constrs.push(eq(smt_var, other_exec_smt_var));
+                    }
+                });
+
+                // Create the `state_machine` function application.
+                appls.push(uf(
+                    state_machine_decl.clone(),
+                    inner_decls
+                        .clone()
+                        .into_iter()
+                        .map(|decl| decl.into())
+                        .collect::<Vec<SMTExpr>>(),
+                ));
+
+                // Add the state machine arguments of this iteration to the declaration set.
+                decls.extend(inner_decls);
+            })
+        });
+
+        let mut statements: Vec<SMTStatement> = decls.into_iter().map(declare_const).collect();
+        statements.push(assert(and_vec(
+            vec![rows_constrs, next_constrs, appls].concat(),
+        )));
+
+        if !self.out_vars.is_empty() {
+            // Create nondeterminism query
+            let query = not(and_vec(
+                all_vars
+                    .iter()
+                    .filter(|pol| {
+                        self.out_vars
+                            .get(&self.pol_to_smt_var(pol, None).name)
+                            .is_some()
+                    })
+                    .map(|pol| {
+                        eq(
+                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec0", rows - 1))),
+                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec1", rows - 1))),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            ));
+
+            statements.push(assert(query));
+        }
+
+        self.out_vec(statements);
     }
 }
 
@@ -299,31 +538,6 @@ impl Visitor for SmtEncoder {
 
     fn visit_pil(&mut self, p: &Pil) -> Result<Self::Error> {
         let ctx = p;
-
-        // Here we declare all variables that are going to be used in the query.
-        // Those are, for every committed polynomial `pol`:
-        // - pol_row0
-        // - pol_next_row0
-        // - pol_row1
-        // - pol_next_row1
-        // - pol_row2
-        // - pol_next_row2
-        for pol in p
-            .references
-            .iter()
-            .flat_map(|(name, _)| ctx.get_polynomials(name))
-        {
-            // ignore columns which are used in known constants,
-            // we already defined them in define_constants
-            if !self.constants.iter().any(|(name, _)| {
-                // the polynomials in RANGE are not arrays
-                Polynomial::basic(name).with_next(false) == pol
-            }) {
-                self.all_vars_from_pol(&pol)
-                    .into_iter()
-                    .for_each(|var| self.out(declare_const(var)));
-            }
-        }
 
         for (index, identity) in p.plookup_identities.iter().enumerate() {
             self.visit_plookup_identity(identity, ctx, index)?;
@@ -341,7 +555,7 @@ impl Visitor for SmtEncoder {
             self.visit_polynomial_identity(identity, ctx, index)?;
         }
 
-        self.out(self.encode_state_machine(p));
+        self.encode_state_machine(p, 3);
 
         Ok(())
     }
@@ -360,6 +574,8 @@ impl Visitor for SmtEncoder {
         let expr = eq_zero(self.encode_expression(constr, ctx));
         let fun = self.constr_to_smt_function(i, idx, ctx);
         self.funs.push(fun.clone());
+        self.fun_constraints
+            .insert(fun.name.clone(), Constraint::Identity(i.clone()));
         let fun_def = define_fun(fun, expr);
         self.out(fun_def);
         Ok(())
@@ -435,6 +651,8 @@ impl Visitor for SmtEncoder {
         let lookup_function =
             SMTFunction::new(format!("lookup_{}", idx), SMTSort::Bool, parameters);
         self.funs.push(lookup_function.clone());
+        self.fun_constraints
+            .insert(lookup_function.name.clone(), Constraint::Lookup(i.clone()));
 
         let fun_def = define_fun(lookup_function, exists(vec![row], and_vec(conditions)));
         self.out(fun_def);
@@ -515,7 +733,12 @@ mod test {
         let pil_str = pilcom("pil/zkevm/byte4.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
-        let smt_pil = SmtPil::new(pil, known_constants());
+        let smt_pil = SmtPil::new(
+            pil,
+            known_constants(),
+            BTreeSet::default(),
+            BTreeSet::default(),
+        );
 
         println!("{}", smt_pil);
     }
@@ -525,7 +748,12 @@ mod test {
         let pil_str = pilcom("pil/zkevm/arith.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
-        let smt_pil = SmtPil::new(pil, known_constants());
+        let smt_pil = SmtPil::new(
+            pil,
+            known_constants(),
+            BTreeSet::default(),
+            BTreeSet::default(),
+        );
 
         println!("{}", smt_pil);
     }

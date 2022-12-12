@@ -1,10 +1,10 @@
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SMTSort {
     Bool,
     Int,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SMTVariable {
     pub name: String,
     pub sort: SMTSort,
@@ -84,6 +84,7 @@ pub enum SMTOp {
     Sub,
     Mul,
     Div,
+    Mod,
     Lt,
     Le,
     Gt,
@@ -117,6 +118,7 @@ pub fn eq_zero<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
 pub fn neq_zero<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     neq(expr, 0)
 }
+*/
 
 pub fn not<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     SMTExpr {
@@ -125,7 +127,7 @@ pub fn not<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     }
 }
 
-
+/*
 pub fn and<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::And,
@@ -211,7 +213,6 @@ pub fn mul<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
-/*
 pub fn div<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Div,
@@ -219,6 +220,14 @@ pub fn div<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
+pub fn modulo<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
+    SMTExpr {
+        op: SMTOp::Mod,
+        args: vec![lhs.into(), rhs.into()],
+    }
+}
+
+/*
 pub fn lt<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Lt,
@@ -282,11 +291,9 @@ pub fn literal_false() -> SMTExpr {
 */
 
 // SMT statement builders
-/*
 pub fn assert(expr: SMTExpr) -> SMTStatement {
     SMTStatement::Assert(expr)
 }
-*/
 
 pub fn declare_const(var: SMTVariable) -> SMTStatement {
     SMTStatement::DeclareConst(var)
@@ -332,7 +339,11 @@ impl SMTFormat for SMTExpr {
         match &self.op {
             SMTOp::Eq => {
                 assert!(self.args.len() == 2);
-                format!("(= {} {})", self.args[0].as_smt(), self.args[1].as_smt())
+                format!(
+                    "\n\t\t(= {} {})",
+                    self.args[0].as_smt(),
+                    self.args[1].as_smt()
+                )
             }
             SMTOp::Not => {
                 assert!(self.args.len() == 1);
@@ -375,6 +386,10 @@ impl SMTFormat for SMTExpr {
                 assert!(self.args.len() == 2);
                 format!("(/ {} {})", self.args[0].as_smt(), self.args[1].as_smt())
             }
+            SMTOp::Mod => {
+                assert!(self.args.len() == 2);
+                format!("(mod {} {})", self.args[0].as_smt(), self.args[1].as_smt())
+            }
             SMTOp::Lt => {
                 assert!(self.args.len() == 2);
                 format!("(< {} {})", self.args[0].as_smt(), self.args[1].as_smt())
@@ -410,7 +425,7 @@ impl SMTFormat for SMTExpr {
             SMTOp::Variable(var) => format!("({} {})", var.as_smt(), self.args.as_smt()),
 
             SMTOp::UF(function) => {
-                format!("({} {})", function.name, self.args.as_smt())
+                format!("\n\t\t({} {})", function.name, self.args.as_smt())
             }
         }
     }
@@ -436,7 +451,7 @@ impl SMTFormat for SMTStatement {
                 expr.as_smt()
             ),
             SMTStatement::DefineFun(var, vars, expr) => format!(
-                "(define-fun {} ({}) {} {})",
+                "(define-fun {} ({}) {} {})\n",
                 var.name,
                 vars.iter()
                     .map(|var| format!("({} {})", var.name, var.sort.as_smt()))
