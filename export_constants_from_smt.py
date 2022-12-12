@@ -12,9 +12,10 @@ def all_values(func_name):
     row = z3.Int('row')
     val = z3.Int('val')
     for i in range(2097152):
+        # Without the push and pop, this is much slower.
+        # TODO: maybe report a Z3 bug?
         s.push()
-        s.add(row == i)
-        s.check()
+        s.check(row == i)
         yield s.model()[val]
         s.pop()
 
