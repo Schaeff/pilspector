@@ -47,6 +47,8 @@ pub struct Args {
         help = "The used SMT solver."
     )]
     pub solver: String,
+    #[clap(long, short = 'd', help = "Dump the generated SMT query.")]
+    pub dump_query: bool,
 }
 
 fn main() {
@@ -75,7 +77,10 @@ fn main() {
             };
 
             let smt_pil = SmtPil::new(pil, known_constants(), in_vars, out_vars);
-            //println!("{}", smt_pil);
+
+            if args.dump_query {
+                println!("{}", smt_pil);
+            }
 
             let (output, error) = solver::query_smt_with_solver(
                 &format!("{}", smt_pil),
@@ -83,10 +88,20 @@ fn main() {
             );
 
             if !output.is_empty() {
-                println!("\nOutput = {}", output);
+                if output.starts_with("unsat") {
+                    println!("State machine is deterministic.");
+                } else if output.starts_with("sat") {
+                    println!(
+                        "State machine may be nondeterministic.\nCounterexample = {}",
+                        output
+                    );
+                } else {
+                    panic!("Unexpected result: {}", output);
+                }
             }
+
             if !error.is_empty() {
-                println!("\nError= {}", error);
+                println!("\nSMT error= {}", error);
             }
         }
     }
