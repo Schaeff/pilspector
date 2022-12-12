@@ -1,5 +1,5 @@
 use crate::{
-    ast::{ExpressionId, Pil, PublicCell, Reference},
+    ast::{ExpressionId, Pil, Polynomials, PublicCell},
     visitor::*,
 };
 
@@ -53,15 +53,15 @@ impl Visitor for Validator {
         Ok(())
     }
 
-    fn visit_reference(&mut self, r: &Reference, _: &Pil) -> Result<Self::Error> {
+    fn visit_polynomials(&mut self, r: &Polynomials, _: &Pil) -> Result<Self::Error> {
         match r {
-            Reference::ConstP(r) => {
+            Polynomials::ConstP(r) => {
                 self.constant_count += r.len.unwrap_or(1);
             }
-            Reference::CmP(r) => {
+            Polynomials::CmP(r) => {
                 self.commited_count += r.len.unwrap_or(1);
             }
-            Reference::ImP(r) => {
+            Polynomials::ImP(r) => {
                 self.intermediate_count += r.len.unwrap_or(1);
             }
         };
