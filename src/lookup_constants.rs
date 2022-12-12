@@ -1,4 +1,7 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+
+use regex::Regex;
 
 use crate::ast::*;
 use crate::smt::*;
@@ -19,13 +22,13 @@ pub struct LookupConstants {
     /// is equal to `v`.
     /// The lookup (e1, e2, ..., en) in (l1, l2, ..., ln) is translated to
     /// (exists ((row Int)) (and (l1 row e1) (l2 row e2) ... (ln row e2)))
-    constants: BTreeMap<String, SMTStatement>,
+    constants: BTreeSet<&'static str>,
     /// Specializations for full lookups, i.e. those cannot be combined and only applied
     /// if the constants on the right hand side of a lookup exactly match the key in this map.
     /// The expression is the body of an SMT function of the form
     /// (define-fun <lookup name> ((e1 Int) (e2 Int) ... (en Int)) Bool ...)
     /// that return true if and only if the expressions (e1, e2, ..., en) are in the lookup.
-    shortcuts: BTreeMap<Vec<String>, (SMTFunction, SMTExpr)>,
+    shortcuts: BTreeMap<Vec<&'static str>, (SMTFunction, SMTExpr)>,
 }
 
 impl Default for LookupConstants {
@@ -41,16 +44,10 @@ impl LookupConstants {
             shortcuts: known_shortcut_lookups(),
         }
     }
-    pub fn known_lookup_constant(&self, lookup: &ShiftedPolynomial) -> Option<String> {
+    pub fn known_lookup_constant(&self, lookup: &ShiftedPolynomial) -> Option<&'static str> {
         self.constants
-            .iter()
-            .find(|(name, _)| *lookup == Polynomial::basic(name).with_next(false))
-            .map(|(name, _)| name.clone())
-    }
-
-    pub fn known_lookup_constant_escaped(&self, lookup: &ShiftedPolynomial) -> Option<String> {
-        self.known_lookup_constant(lookup)
-            .map(|name| escape_identifier(&name))
+            .get(escape_identifier(&lookup.to_string()).as_str())
+            .map(|name| *name)
     }
 
     pub fn encode_lookup(&self, lhs: Vec<SMTExpr>, rhs: Vec<ShiftedPolynomial>) -> SMTExpr {
@@ -75,7 +72,7 @@ impl LookupConstants {
                         .map(|(expr, constant)| {
                             uf(
                                 constant_lookup_function(
-                                    self.known_lookup_constant_escaped(constant).unwrap(),
+                                    self.known_lookup_constant(constant).unwrap().to_string(),
                                 ),
                                 vec![row.clone().into(), expr],
                             )
@@ -87,217 +84,28 @@ impl LookupConstants {
     }
 
     pub fn function_definitions(&self) -> Vec<SMTStatement> {
-        self.constants
+        self.shortcuts
             .iter()
-            .map(|(_name, def)| def.clone())
-            .chain(
-                self.shortcuts
-                    .iter()
-                    .map(|(_name, (fun, body))| define_fun(fun.clone(), body.clone())),
-            )
+            .map(|(_name, (fun, body))| define_fun(fun.clone(), body.clone()))
             .collect()
     }
 }
 
-fn known_constants() -> BTreeMap<String, SMTStatement> {
-    let mut result = BTreeMap::new();
-    let r = SMTVariable::new("r".to_string(), SMTSort::Int);
-    let v = SMTVariable::new("v".to_string(), SMTSort::Int);
-    assert_eq!(
-        constant_lookup_function(String::new()).args,
-        vec![r.clone(), v.clone()]
-    );
-    result.insert(
-        "Global.BYTE2".to_string(),
-        define_fun(
-            constant_lookup_function("Global_BYTE2".to_string()),
-            and_vec(vec![
-                eq(r.clone(), v.clone()), // strictly, r % 2**16 = v - this is important if this is used together with another constant in the same lookup
-                ge(v.clone(), 0),
-                le(v.clone(), u16::MAX as u64),
-            ]),
-        ),
-    );
-    result.insert(
-        "Global.BYTE".to_string(),
-        define_fun(
-            constant_lookup_function("Global_BYTE".to_string()),
-            and_vec(vec![
-                eq(r.clone(), v.clone()), // strictly, r % 2**8 = v - this is important if this is used together with another constant in the same lookup
-                ge(v.clone(), 0),
-                le(v.clone(), u8::MAX as u64),
-            ]),
-        ),
-    );
-    result.insert(
-        "Arith.SEL_BYTE2_BIT19".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_SEL_BYTE2_BIT19".to_string()),
-            ite(
-                le(r.clone(), u16::MAX as u64),
-                eq(v.clone(), 0),
-                eq(v.clone(), 1),
-            ),
-        ),
-    );
-    result.insert(
-        "Arith.BYTE2_BIT19".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_BYTE2_BIT19".to_string()),
-            // definition is: v == r % (2**16 + 2**19)
-            // TODO This is not modeled below.
-            and_vec(vec![
-                eq(r.clone(), v.clone()),
-                ge(v.clone(), 0),
-                le(v.clone(), ((1 << 16) + (1 << 19)) - 1),
-            ]),
-        ),
-    );
-    // All the GL_SIGNED constants are built in the same way, with parameters
-    // from, to, steps:
-    // starts at "start", stays at a value for "steps" steps, then is incrementd by 1
-    // if it reaches "end", is reset to "start" (only after the steps, i.e. "end" is
-    // included in the range)
-    // formally:
-    // (r, v) => v == start + floor(r / steps) % (end + 1 - start)
-    fn range_constant(start: i64, end: i64, step: i64) -> SMTExpr {
-        let r = SMTVariable::new("r".to_string(), SMTSort::Int);
-        let v = SMTVariable::new("v".to_string(), SMTSort::Int);
-        let k = SMTVariable::new("k".to_string(), SMTSort::Int);
-        assert_eq!(
-            constant_lookup_function(String::new()).args,
-            vec![r.clone(), v.clone()]
-        );
-        assert!(end >= start);
-        let span = (end + 1 - start) as u64;
-        if step == 1 {
-            // v == start + r % span
-            // v >= start && v <= end && exists k: v == start + r + k * span
-            and_vec(vec![
-                ge(v.clone(), signed_to_smt(start)),
-                le(v.clone(), signed_to_smt(end)),
-                exists(
-                    vec![k.clone()],
-                    eq(v, add(signed_to_smt(start), add(r, mul(k, span)))),
-                ),
-            ])
-        } else {
-            // v == start + floor(r / step) % span
-            // v >= start && v <= end && exists k: v == start + floor(r / step) + k * span
-            unimplemented!()
-        }
-    }
-    result.insert(
-        "Arith.GL_SIGNED_4BITS_C0".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_GL_SIGNED_4BITS_C0".to_string()),
-            range_constant(-16, 16, 1),
-        ),
-    );
-    result.insert(
-        "Arith.GL_SIGNED_4BITS_C1".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_GL_SIGNED_4BITS_C1".to_string()),
-            range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33
-        ),
-    );
-    result.insert(
-        "Arith.GL_SIGNED_4BITS_C2".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_GL_SIGNED_4BITS_C2".to_string()),
-            range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33 * 33
-        ),
-    );
-    result.insert(
-        "Arith.GL_SIGNED_18BITS".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_GL_SIGNED_18BITS".to_string()),
-            range_constant(-(1 << 18), 1 << 18, 1),
-        ),
-    );
-
-    result.insert(
-        "Binary.P_LAST".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_LAST".to_string()),
-            eq(
-                v.clone(),
-                modulo(div(r.clone(), 131072 /* 256 * 256 * 2 */), 2),
-            ),
-        ),
-    );
-
-    result.insert(
-        "Binary.P_OPCODE".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_OPCODE".to_string()),
-            eq(v.clone(), div(r.clone(), 262144 /* 256 * 256 * 2 * 2*/)),
-        ),
-    );
-
-    result.insert(
-        "Binary.P_A".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_A".to_string()),
-            eq(v, modulo(div(r, 256), 256)),
-        ),
-    );
-
-    // TODO
-    result.insert(
-        "Binary.P_B".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_B".to_string()),
-            literal_true(),
-        ),
-    );
-
-    // TODO
-    result.insert(
-        "Binary.P_C".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_C".to_string()),
-            literal_true(),
-        ),
-    );
-
-    // TODO
-    result.insert(
-        "Binary.P_CIN".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_CIN".to_string()),
-            literal_true(),
-        ),
-    );
-
-    // TODO
-    result.insert(
-        "Binary.P_COUT".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_COUT".to_string()),
-            literal_true(),
-        ),
-    );
-
-    // TODO
-    result.insert(
-        "Binary.P_USE_CARRY".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_USE_CARRY".to_string()),
-            literal_true(),
-        ),
-    );
-
-    result
+fn known_constants() -> BTreeSet<&'static str> {
+    let re =
+        Regex::new(r"\(define-fun\s+([_a-zA-Z0-9]+)\s*\(\(r Int\)\s*\(v Int\)\)\s*Bool").unwrap();
+    re.captures_iter(SMT_PREAMBLE)
+        .map(|cap| cap.get(1).unwrap().as_str())
+        .collect()
 }
 
-fn known_shortcut_lookups() -> BTreeMap<Vec<String>, (SMTFunction, SMTExpr)> {
+fn known_shortcut_lookups() -> BTreeMap<Vec<&'static str>, (SMTFunction, SMTExpr)> {
     let mut result = BTreeMap::new();
     let a = SMTVariable::new("a".to_string(), SMTSort::Int);
     let b = SMTVariable::new("b".to_string(), SMTSort::Int);
     let c = SMTVariable::new("c".to_string(), SMTSort::Int);
     result.insert(
-        vec!["Global.BYTE2".to_string()],
+        vec!["Global_BYTE2"],
         (
             SMTFunction::new(
                 "Global_BYTE2_isolated".to_string(),
@@ -308,7 +116,7 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<String>, (SMTFunction, SMTExpr)> {
         ),
     );
     result.insert(
-        vec!["Global.BYTE".to_string()],
+        vec!["Global_BYTE"],
         (
             SMTFunction::new(
                 "Global_BYTE_isolated".to_string(),
@@ -319,10 +127,7 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<String>, (SMTFunction, SMTExpr)> {
         ),
     );
     result.insert(
-        vec![
-            "Arith.SEL_BYTE2_BIT19".to_string(),
-            "Arith.BYTE2_BIT19".to_string(),
-        ],
+        vec!["Arith_SEL_BYTE2_BIT19", "Arith_BYTE2_BIT19"],
         (
             SMTFunction::new(
                 "Arith_SEL_BYTE2_BIT19_AND_BYTE2_BIT19".to_string(),
@@ -345,7 +150,7 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<String>, (SMTFunction, SMTExpr)> {
         ),
     );
     result.insert(
-        vec!["Arith.GL_SIGNED_18BITS".to_string()],
+        vec!["Arith_GL_SIGNED_18BITS"],
         (
             SMTFunction::new(
                 "Arith_GL_SIGNED_18BITS_isolated".to_string(),
@@ -360,9 +165,9 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<String>, (SMTFunction, SMTExpr)> {
     );
     result.insert(
         vec![
-            "Arith.GL_SIGNED_4BITS_C0".to_string(),
-            "Arith.GL_SIGNED_4BITS_C1".to_string(),
-            "Arith.GL_SIGNED_4BITS_C2".to_string(),
+            "Arith_GL_SIGNED_4BITS_C0",
+            "Arith_GL_SIGNED_4BITS_C1",
+            "Arith_GL_SIGNED_4BITS_C2",
         ],
         (
             SMTFunction::new(

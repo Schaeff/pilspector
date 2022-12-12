@@ -4,6 +4,7 @@ use std::fmt;
 
 use crate::ast::*;
 use crate::lookup_constants::LookupConstants;
+use crate::smt;
 use crate::smt::*;
 use crate::visitor::*;
 
@@ -72,10 +73,7 @@ impl fmt::Display for SmtPil {
         encoder.define_constants();
         encoder.visit_pil(&self.pil)?;
 
-        writeln!(
-            f,
-            "; Uncomment the line below to enable proofs\n;(set-option :produce-proofs true)"
-        )?;
+        f.write_str(smt::SMT_PREAMBLE)?;
         writeln!(
             f,
             "{}",
@@ -425,7 +423,7 @@ impl Visitor for SmtEncoder {
                         let lookup = w.inner.to_polynomial(ctx);
                         if self
                             .lookup_constants
-                            .known_lookup_constant_escaped(&lookup)
+                            .known_lookup_constant(&lookup)
                             .is_none()
                         {
                             panic!("const {} in plookup is not known", lookup);

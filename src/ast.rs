@@ -230,9 +230,9 @@ impl Polynomial {
 }
 
 impl Polynomial {
-    pub fn basic(key: &Name) -> Self {
+    pub fn basic(key: &str) -> Self {
         Self {
-            key: key.clone(),
+            key: key.to_string(),
             index: None,
         }
     }

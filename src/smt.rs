@@ -1,3 +1,5 @@
+pub const SMT_PREAMBLE: &'static str = include_str!("constants.smt");
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SMTSort {
     Bool,
