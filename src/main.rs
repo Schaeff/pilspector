@@ -77,7 +77,7 @@ fn main() {
                 BTreeSet::default()
             };
 
-            let smt_pil = SmtPil::new(pil, known_constants(), in_vars, out_vars);
+            let smt_pil = SmtPil::new(pil, LookupConstants::new(), in_vars, out_vars);
 
             if args.dump_query {
                 println!("{}", smt_pil);

@@ -423,7 +423,8 @@ impl Visitor for SmtEncoder {
                 .map(|lookup| match &ctx.expressions[lookup.0] {
                     Expression::Const(w) => {
                         let lookup = w.inner.to_polynomial(ctx);
-                        if self.lookup_constants
+                        if self
+                            .lookup_constants
                             .known_lookup_constant_escaped(&lookup)
                             .is_none()
                         {
@@ -448,7 +449,8 @@ impl Visitor for SmtEncoder {
 
         let fun_def = define_fun(
             lookup_function,
-            self.lookup_constants.encode_lookup(lhs_exprs, rhs_constants),
+            self.lookup_constants
+                .encode_lookup(lhs_exprs, rhs_constants),
         );
         self.out(fun_def);
 
