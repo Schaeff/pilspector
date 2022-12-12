@@ -97,7 +97,19 @@ fn main() {
 
             println!();
             println!("Variables which appear the least in the state machine:");
-            println!("{}", analyser::OccurrenceCounter::count(&pil));
+
+            let occurences = analyser::OccurrenceCounter::count(&pil);
+            for (pol, (itself, next)) in occurences {
+                println!(
+                    "{} appears {} times ({} times {} + {} times {})",
+                    pol.clone(),
+                    itself + next,
+                    itself,
+                    pol.clone().with_next(false),
+                    next,
+                    pol.with_next(true)
+                );
+            }
             println!();
 
             println!("Pattern detection based on `./pil/patterns`");

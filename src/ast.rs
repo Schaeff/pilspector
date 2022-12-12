@@ -217,6 +217,10 @@ impl ShiftedPolynomial {
             ..self.clone()
         })
     }
+
+    pub fn polynomial(&self) -> &Polynomial {
+        &self.pol
+    }
 }
 
 impl Polynomial {
