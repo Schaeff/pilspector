@@ -247,16 +247,16 @@ impl SmtEncoder {
             // state_machine(row_i, input_row_i_exec_1, out_row_i_exec_1, out_next_row_i_exec_1)
             (0..=1).for_each(|exec| {
                 // Create the state machine arguments
-                let mut inner_decls: BTreeSet<SMTVariable> = BTreeSet::default();
+                let mut inner_decls: Vec<SMTVariable> = vec![];
 
                 // Add row to the state machine arguments
-                inner_decls.insert(smt_row.clone());
+                inner_decls.push(smt_row.clone());
 
                 all_vars.iter().for_each(|pol| {
                     // Create and declare the variable for this row and execution.
                     let smt_var =
                         self.pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec)));
-                    inner_decls.insert(smt_var.clone());
+                    inner_decls.push(smt_var.clone());
 
                     // Bind `var` and `next_var` in two sequential rows in the same execution.
                     if row > 0 {
