@@ -47,7 +47,7 @@ impl LookupConstants {
     pub fn known_lookup_constant(&self, lookup: &ShiftedPolynomial) -> Option<&'static str> {
         self.constants
             .get(escape_identifier(&lookup.to_string()).as_str())
-            .map(|name| *name)
+            .copied()
     }
 
     pub fn encode_lookup(&self, lhs: Vec<SMTExpr>, rhs: Vec<ShiftedPolynomial>) -> SMTExpr {

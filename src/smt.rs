@@ -1,4 +1,4 @@
-pub const SMT_PREAMBLE: &'static str = include_str!("constants.smt");
+pub const SMT_PREAMBLE: &str = include_str!("constants.smt");
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SMTSort {
@@ -215,6 +215,7 @@ pub fn mul<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
+/*
 pub fn div<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Div,
@@ -229,7 +230,6 @@ pub fn modulo<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
-/*
 pub fn lt<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Lt,
