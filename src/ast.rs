@@ -52,13 +52,11 @@ impl ToPolynomial for Cm {
             .next()
             .unwrap();
 
-        ShiftedPolynomial {
-            pol: Polynomial {
-                key: key.clone(),
-                index: r.len.map(|_| self.id.0 - r.id.0),
-            },
-            next: self.next,
+        Polynomial {
+            key: key.clone(),
+            index: r.len.map(|_| self.id.0 - r.id.0),
         }
+        .with_next(self.next)
     }
 }
 
@@ -76,13 +74,11 @@ impl ToPolynomial for Const {
             .next()
             .unwrap();
 
-        ShiftedPolynomial {
-            pol: Polynomial {
-                key: key.clone(),
-                index: r.len.map(|_| self.id.0 - r.id.0),
-            },
-            next: self.next,
+        Polynomial {
+            key: key.clone(),
+            index: r.len.map(|_| self.id.0 - r.id.0),
         }
+        .with_next(self.next)
     }
 }
 
@@ -100,13 +96,11 @@ impl ToPolynomial for Exp {
             .next()
             .unwrap();
 
-        ShiftedPolynomial {
-            pol: Polynomial {
-                key: key.clone(),
-                index: r.len.map(|_| self.id.0 - r.id.0),
-            },
-            next: self.next,
+        Polynomial {
+            key: key.clone(),
+            index: r.len.map(|_| self.id.0 - r.id.0),
         }
+        .with_next(self.next)
     }
 }
 
@@ -212,6 +206,16 @@ pub struct Polynomial {
 impl From<Polynomial> for ShiftedPolynomial {
     fn from(pol: Polynomial) -> Self {
         ShiftedPolynomial { pol, next: false }
+    }
+}
+
+impl ShiftedPolynomial {
+    // shift this polynomial if it's not already shifted
+    pub fn next(&self) -> Option<Self> {
+        (!self.next).then(|| Self {
+            next: true,
+            ..self.clone()
+        })
     }
 }
 
@@ -321,9 +325,9 @@ impl From<usize> for RowId {
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
 pub enum Polynomials {
-    CmP(ReferenceInner<CommittedPolynomialId>),
-    ConstP(ReferenceInner<ConstantPolynomialId>),
-    ImP(ReferenceInner<ExpressionId>),
+    CmP(PolynomialsInner<CommittedPolynomialId>),
+    ConstP(PolynomialsInner<ConstantPolynomialId>),
+    ImP(PolynomialsInner<ExpressionId>),
 }
 
 impl Polynomials {
@@ -340,7 +344,7 @@ impl Polynomials {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub struct ReferenceInner<Id> {
+pub struct PolynomialsInner<Id> {
     pub id: Id,
     pub pol_deg: Option<usize>,
     pub is_array: bool,

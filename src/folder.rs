@@ -169,20 +169,20 @@ pub trait Folder: Sized {
         unimplemented!()
     }
 
-    fn fold_reference(
+    fn fold_polynomials(
         &mut self,
         r: Polynomials,
         ctx: &mut Pil,
     ) -> Result<Option<Polynomials>, Self::Error> {
-        fold_reference(self, r, ctx)
+        fold_polynomials(self, r, ctx)
     }
 
-    fn fold_reference_inner<Id>(
+    fn fold_polynomials_inner<Id>(
         &mut self,
-        inner: ReferenceInner<Id>,
+        inner: PolynomialsInner<Id>,
         ctx: &mut Pil,
-    ) -> Result<ReferenceInner<Id>, Self::Error> {
-        fold_reference_inner(self, inner, ctx)
+    ) -> Result<PolynomialsInner<Id>, Self::Error> {
+        fold_polynomials_inner(self, inner, ctx)
     }
 
     fn fold_public_cell(
@@ -209,7 +209,7 @@ pub fn fold_pil<F: Folder>(f: &mut F, p: Pil) -> Result<Pil, F::Error> {
         .flat_map(|(name, polynomials)| {
             f.fold_name(name, ctx)
                 .and_then(|name| {
-                    f.fold_reference(polynomials, ctx)
+                    f.fold_polynomials(polynomials, ctx)
                         .map(|r| r.map(|r| (name, r)))
                 })
                 .transpose()
@@ -258,23 +258,23 @@ pub fn fold_pil<F: Folder>(f: &mut F, p: Pil) -> Result<Pil, F::Error> {
     })
 }
 
-pub fn fold_reference<F: Folder>(
+pub fn fold_polynomials<F: Folder>(
     f: &mut F,
     r: Polynomials,
     ctx: &mut Pil,
 ) -> Result<Option<Polynomials>, F::Error> {
     Ok(match r {
-        Polynomials::CmP(i) => Some(Polynomials::CmP(f.fold_reference_inner(i, ctx)?)),
-        Polynomials::ConstP(i) => Some(Polynomials::ConstP(f.fold_reference_inner(i, ctx)?)),
-        Polynomials::ImP(i) => Some(Polynomials::ImP(f.fold_reference_inner(i, ctx)?)),
+        Polynomials::CmP(i) => Some(Polynomials::CmP(f.fold_polynomials_inner(i, ctx)?)),
+        Polynomials::ConstP(i) => Some(Polynomials::ConstP(f.fold_polynomials_inner(i, ctx)?)),
+        Polynomials::ImP(i) => Some(Polynomials::ImP(f.fold_polynomials_inner(i, ctx)?)),
     })
 }
 
-pub fn fold_reference_inner<F: Folder, Id>(
+pub fn fold_polynomials_inner<F: Folder, Id>(
     _f: &mut F,
-    i: ReferenceInner<Id>,
+    i: PolynomialsInner<Id>,
     _ctx: &mut Pil,
-) -> Result<ReferenceInner<Id>, F::Error> {
+) -> Result<PolynomialsInner<Id>, F::Error> {
     Ok(i)
 }
 

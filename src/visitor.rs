@@ -156,23 +156,23 @@ pub trait Visitor: Sized {
     }
 
     fn visit_name(&mut self, c: &Name, ctx: &Pil) -> Result<Self::Error> {
-        visit_reference_key(self, c, ctx)
+        visit_name(self, c, ctx)
     }
 
     fn visit_polynomial(&mut self, c: &ShiftedPolynomial, ctx: &Pil) -> Result<Self::Error> {
         visit_polynomial(self, c, ctx)
     }
 
-    fn visit_reference(&mut self, r: &Polynomials, ctx: &Pil) -> Result<Self::Error> {
-        visit_reference(self, r, ctx)
+    fn visit_polynomials(&mut self, r: &Polynomials, ctx: &Pil) -> Result<Self::Error> {
+        visit_polynomials(self, r, ctx)
     }
 
-    fn visit_reference_inner<Id>(
+    fn visit_polynomials_inner<Id>(
         &mut self,
-        inner: &ReferenceInner<Id>,
+        inner: &PolynomialsInner<Id>,
         ctx: &Pil,
     ) -> Result<Self::Error> {
-        visit_reference_inner(self, inner, ctx)
+        visit_polynomials_inner(self, inner, ctx)
     }
 
     fn visit_public_cell(&mut self, cell: &PublicCell, ctx: &Pil) -> Result<Self::Error> {
@@ -189,7 +189,7 @@ pub fn visit_pil<V: Visitor>(v: &mut V, p: &Pil) -> Result<V::Error> {
 
     for (key, r) in &p.references {
         v.visit_name(key, ctx)?;
-        v.visit_reference(r, ctx)?;
+        v.visit_polynomials(r, ctx)?;
     }
 
     for (index, identity) in p.pol_identities.iter().enumerate() {
@@ -392,29 +392,29 @@ pub fn visit_number<V: Visitor>(_v: &mut V, _c: &Number, _ctx: &Pil) -> Result<V
     Ok(())
 }
 
-pub fn visit_reference_key<V: Visitor>(_v: &mut V, _c: &Name, _ctx: &Pil) -> Result<V::Error> {
+pub fn visit_name<V: Visitor>(_v: &mut V, _c: &Name, _ctx: &Pil) -> Result<V::Error> {
     Ok(())
 }
 
-pub fn visit_reference<V: Visitor>(v: &mut V, r: &Polynomials, ctx: &Pil) -> Result<V::Error> {
+pub fn visit_polynomials<V: Visitor>(v: &mut V, r: &Polynomials, ctx: &Pil) -> Result<V::Error> {
     match r {
         Polynomials::CmP(i) => {
-            v.visit_reference_inner(i, ctx)?;
+            v.visit_polynomials_inner(i, ctx)?;
         }
         Polynomials::ConstP(i) => {
-            v.visit_reference_inner(i, ctx)?;
+            v.visit_polynomials_inner(i, ctx)?;
         }
         Polynomials::ImP(i) => {
-            v.visit_reference_inner(i, ctx)?;
+            v.visit_polynomials_inner(i, ctx)?;
         }
     };
 
     Ok(())
 }
 
-pub fn visit_reference_inner<V: Visitor, Id>(
+pub fn visit_polynomials_inner<V: Visitor, Id>(
     _v: &mut V,
-    _i: &ReferenceInner<Id>,
+    _i: &PolynomialsInner<Id>,
     _ctx: &Pil,
 ) -> Result<V::Error> {
     Ok(())
