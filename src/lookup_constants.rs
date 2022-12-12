@@ -147,6 +147,13 @@ fn known_constants() -> BTreeMap<String, SMTStatement> {
             le(v.clone(), u8::MAX as u64),
         ]),
     );
+    for i in 0..32 {
+        add_constant(
+            &mut result,
+            &format!("Arith.CLK_{i}"),
+            eq(v.clone(), ite(eq(modulo(r.clone(), 32), i), 1, 0)),
+        );
+    }
     add_constant(
         &mut result,
         "Arith.SEL_BYTE2_BIT19",
