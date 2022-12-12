@@ -239,16 +239,15 @@ fn known_constants() -> BTreeMap<String, SMTStatement> {
         "Binary.P_A".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_A".to_string()),
-            eq(v, modulo(div(r, 256), 256)),
+            eq(v.clone(), modulo(div(r.clone(), 256), 256)),
         ),
     );
 
-    // TODO
     result.insert(
         "Binary.P_B".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_B".to_string()),
-            literal_true(),
+            eq(v.clone(), modulo(r.clone(), 256)),
         ),
     );
 
@@ -261,12 +260,11 @@ fn known_constants() -> BTreeMap<String, SMTStatement> {
         ),
     );
 
-    // TODO
     result.insert(
         "Binary.P_CIN".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_CIN".to_string()),
-            literal_true(),
+            eq(v.clone(), modulo(div(r.clone(), 65536), 2))
         ),
     );
 
