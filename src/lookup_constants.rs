@@ -251,7 +251,11 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         eq(v.clone(), div(r.clone(), 262144 /* 256 * 256 * 2 * 2*/)),
     );
 
-    add_constant(&mut result, "Byte4.SET", eq(v.clone(), ite(eq_zero(modulo(r.clone(), 2)), 1, 0)));
+    add_constant(
+        &mut result,
+        "Byte4.SET",
+        eq(v.clone(), ite(eq_zero(modulo(r.clone(), 2)), 1, 0)),
+    );
 
     add_constant(&mut result, "Binary.P_A", eq(v, modulo(div(r, 256), 256)));
 
