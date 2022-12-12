@@ -34,88 +34,92 @@ pub struct Pil {
     pub connection_identities: Vec<ConnectionIdentity>,
 }
 
-impl Pil {
-    pub fn get_cm_reference(
-        &self,
-        cm: &Cm,
-    ) -> (IndexedReferenceKey, &ReferenceInner<CommittedPolynomialId>) {
-        let (key, r) = self
+pub trait ToPolynomial {
+    fn to_polynomial(&self, ctx: &Pil) -> ShiftedPolynomial;
+}
+
+impl ToPolynomial for Cm {
+    fn to_polynomial(&self, ctx: &Pil) -> ShiftedPolynomial {
+        let (key, r) = ctx
             .references
             .iter()
             .filter_map(|(key, r)| match r {
-                Reference::CmP(r) => (cm.id.0 >= r.id.0 && cm.id.0 <= r.id.0 + r.len.unwrap_or(0))
-                    .then_some((key, r)),
-                _ => None,
-            })
-            .next()
-            .unwrap();
-
-        let key = IndexedReferenceKey {
-            key: key.clone(),
-            index: r.len.map(|_| cm.id.0 - r.id.0),
-        };
-
-        (key, r)
-    }
-
-    pub fn get_exp_reference(
-        &self,
-        exp: &Exp,
-    ) -> (IndexedReferenceKey, &ReferenceInner<ExpressionId>) {
-        let (key, r) = self
-            .references
-            .iter()
-            .filter_map(|(key, r)| match r {
-                Reference::ImP(r) => (exp.id.0 >= r.id.0
-                    && exp.id.0 <= r.id.0 + r.len.unwrap_or(0))
+                Polynomials::CmP(r) => (self.id.0 >= r.id.0
+                    && self.id.0 <= r.id.0 + r.len.unwrap_or(0))
                 .then_some((key, r)),
                 _ => None,
             })
             .next()
             .unwrap();
 
-        let key = IndexedReferenceKey {
+        Polynomial {
             key: key.clone(),
-            index: r.len.map(|_| exp.id.0 - r.id.0),
-        };
-
-        (key, r)
+            index: r.len.map(|_| self.id.0 - r.id.0),
+        }
+        .with_next(self.next)
     }
+}
 
-    pub fn get_const_reference(
-        &self,
-        c: &Const,
-    ) -> (IndexedReferenceKey, &ReferenceInner<ConstantPolynomialId>) {
-        let (key, r) = self
+impl ToPolynomial for Const {
+    fn to_polynomial(&self, ctx: &Pil) -> ShiftedPolynomial {
+        let (key, r) = ctx
             .references
             .iter()
             .filter_map(|(key, r)| match r {
-                Reference::ConstP(r) => {
-                    (c.id.0 >= r.id.0 && c.id.0 <= r.id.0 + r.len.unwrap_or(0)).then_some((key, r))
-                }
+                Polynomials::ConstP(r) => (self.id.0 >= r.id.0
+                    && self.id.0 <= r.id.0 + r.len.unwrap_or(0))
+                .then_some((key, r)),
                 _ => None,
             })
             .next()
             .unwrap();
 
-        let key = IndexedReferenceKey {
+        Polynomial {
             key: key.clone(),
-            index: r.len.map(|_| c.id.0 - r.id.0),
-        };
-
-        (key, r)
-    }
-
-    pub fn get_indexed_keys(&self, key: &ReferenceKey, ctx: &Pil) -> Vec<IndexedReferenceKey> {
-        let r = &ctx.references[key];
-        match r.len() {
-            // generate `n` keys for arrays of size `n`
-            Some(len) => (0..len)
-                .map(|index| IndexedReferenceKey::array_element(key, index))
-                .collect(),
-            // generate 1 key for non-array polynomials
-            None => vec![IndexedReferenceKey::basic(key)],
+            index: r.len.map(|_| self.id.0 - r.id.0),
         }
+        .with_next(self.next)
+    }
+}
+
+impl ToPolynomial for Exp {
+    fn to_polynomial(&self, ctx: &Pil) -> ShiftedPolynomial {
+        let (key, r) = ctx
+            .references
+            .iter()
+            .filter_map(|(key, r)| match r {
+                Polynomials::ImP(r) => (self.id.0 >= r.id.0
+                    && self.id.0 <= r.id.0 + r.len.unwrap_or(0))
+                .then_some((key, r)),
+                _ => None,
+            })
+            .next()
+            .unwrap();
+
+        Polynomial {
+            key: key.clone(),
+            index: r.len.map(|_| self.id.0 - r.id.0),
+        }
+        .with_next(self.next)
+    }
+}
+
+impl Pil {
+    /// get all polynomials for a given name: all array accesses, with and without `next`
+    pub fn get_polynomials(&self, key: &Name) -> Vec<ShiftedPolynomial> {
+        let r = &self.references[key];
+
+        [false, true]
+            .iter()
+            .flat_map(|next| match r.len() {
+                // generate `n` keys for arrays of size `n`
+                Some(len) => (0..len)
+                    .map(|index| Polynomial::array_element(key, index).with_next(*next))
+                    .collect(),
+                // generate 1 key for non-array polynomials
+                None => vec![Polynomial::basic(key).with_next(*next)],
+            })
+            .collect()
     }
 }
 
@@ -185,23 +189,45 @@ impl ToStringWithContext for Expression {
 }
 
 pub type PublicCellKey = String;
-pub type ReferenceKey = String;
+pub type Name = String;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct IndexedReferenceKey {
-    key: ReferenceKey,
+pub struct ShiftedPolynomial {
+    pol: Polynomial,
+    next: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Polynomial {
+    key: Name,
     index: Option<usize>,
 }
 
-impl IndexedReferenceKey {
-    pub fn basic(key: &ReferenceKey) -> Self {
+impl From<Polynomial> for ShiftedPolynomial {
+    fn from(pol: Polynomial) -> Self {
+        ShiftedPolynomial { pol, next: false }
+    }
+}
+
+impl Polynomial {
+    pub fn next(self) -> ShiftedPolynomial {
+        self.with_next(true)
+    }
+
+    pub fn with_next(self, next: bool) -> ShiftedPolynomial {
+        ShiftedPolynomial { pol: self, next }
+    }
+}
+
+impl Polynomial {
+    pub fn basic(key: &Name) -> Self {
         Self {
             key: key.clone(),
             index: None,
         }
     }
 
-    pub fn array_element(key: &ReferenceKey, index: usize) -> Self {
+    pub fn array_element(key: &Name, index: usize) -> Self {
         Self {
             key: key.clone(),
             index: Some(index),
@@ -212,12 +238,22 @@ impl IndexedReferenceKey {
         self.index
     }
 
-    pub fn key(&self) -> &ReferenceKey {
+    pub fn key(&self) -> &Name {
         &self.key
     }
 }
 
-impl fmt::Display for IndexedReferenceKey {
+impl fmt::Display for ShiftedPolynomial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.pol)?;
+        if self.next {
+            write!(f, "'")?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for Polynomial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.key)?;
         if let Some(index) = self.index {
@@ -227,7 +263,7 @@ impl fmt::Display for IndexedReferenceKey {
     }
 }
 
-pub type References = BTreeMap<ReferenceKey, Reference>;
+pub type References = BTreeMap<Name, Polynomials>;
 // the index of the expression in the expression list
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
 pub struct ExpressionId(pub usize);
@@ -278,19 +314,19 @@ impl From<usize> for RowId {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
-pub enum Reference {
-    CmP(ReferenceInner<CommittedPolynomialId>),
-    ConstP(ReferenceInner<ConstantPolynomialId>),
-    ImP(ReferenceInner<ExpressionId>),
+pub enum Polynomials {
+    CmP(PolynomialsInner<CommittedPolynomialId>),
+    ConstP(PolynomialsInner<ConstantPolynomialId>),
+    ImP(PolynomialsInner<ExpressionId>),
 }
 
-impl Reference {
+impl Polynomials {
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> Option<usize> {
         match self {
-            Reference::CmP(r) => r.len,
-            Reference::ConstP(r) => r.len,
-            Reference::ImP(r) => r.len,
+            Polynomials::CmP(r) => r.len,
+            Polynomials::ConstP(r) => r.len,
+            Polynomials::ImP(r) => r.len,
         }
     }
 }
@@ -298,7 +334,7 @@ impl Reference {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub struct ReferenceInner<Id> {
+pub struct PolynomialsInner<Id> {
     pub id: Id,
     pub pol_deg: Option<usize>,
     pub is_array: bool,
