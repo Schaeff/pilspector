@@ -114,6 +114,14 @@ impl LookupConstants {
 
 fn add_constant(result: &mut BTreeMap<Polynomial, SMTStatement>, name: &str, body: SMTExpr) {
     let poly = Polynomial::basic(&name.to_string());
+    add_constant_poly(result, poly, body);
+}
+
+fn add_constant_poly(
+    result: &mut BTreeMap<Polynomial, SMTStatement>,
+    poly: Polynomial,
+    body: SMTExpr,
+) {
     result.insert(
         poly.clone(),
         define_fun(constant_lookup_function(constant_function_name(poly)), body),
@@ -147,10 +155,10 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         ]),
     );
     for i in 0..32 {
-        add_constant(
+        add_constant_poly(
             &mut result,
-            &format!("Arith.CLK_{i}"),
-            eq(v.clone(), ite(eq(modulo(r.clone(), 32), i), 1, 0)),
+            Polynomial::array_element(&"Arith.CLK".to_string(), i),
+            eq(v.clone(), ite(eq(modulo(r.clone(), 32), i as u64), 1, 0)),
         );
     }
     add_constant(

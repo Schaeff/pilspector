@@ -191,19 +191,14 @@ impl SmtEncoder {
             }
         });
 
-        let (known_non_lookup_constants, unknown_non_lookup_constants): (Vec<_>, Vec<_>) =
-            const_collector
-                .consts
-                .iter()
-                .partition(|c| self.lookup_constants.is_known_constant(c));
-
         let smt_row_arg = SMTVariable::new("row".to_string(), SMTSort::Int);
         // Add `row` to the state machine input.
         let mut smt_vars: Vec<_> = vec![smt_row_arg.clone()];
 
-        // Make SMT vars for the unknown constants.
+        // Make SMT vars for the constants.
         smt_vars.extend(
-            unknown_non_lookup_constants
+            const_collector
+                .consts
                 .iter()
                 .map(|pol| self.pol_to_smt_var(pol, None))
                 .collect::<Vec<_>>(),
@@ -226,25 +221,28 @@ impl SmtEncoder {
         let state_machine_decl =
             SMTFunction::new("state_machine".to_string(), SMTSort::Bool, smt_vars);
         // Add the UF application of every constraint to the body of the state machine.
-        // This includes constraints and lookups.
+        // This includes constraints, lookups and constants.
         let body = and_vec(
             [
                 self.funs
                     .iter()
                     .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
                     .collect::<Vec<_>>(),
-                known_non_lookup_constants
+                const_collector
+                    .consts
                     .iter()
-                    .map(|c| {
-                        uf(
-                            self.lookup_constants
-                                .known_lookup_constant_as_function(c)
-                                .unwrap(),
-                            vec![
-                                smt_row_arg.clone().into(),
-                                self.pol_to_smt_var(c, None).into(),
-                            ],
-                        )
+                    .filter_map(|c| {
+                        self.lookup_constants
+                            .known_lookup_constant_as_function(c)
+                            .map(|f| {
+                                uf(
+                                    f,
+                                    vec![
+                                        smt_row_arg.clone().into(),
+                                        self.pol_to_smt_var(c, None).into(),
+                                    ],
+                                )
+                            })
                     })
                     .collect::<Vec<_>>(),
             ]
@@ -260,11 +258,11 @@ impl SmtEncoder {
         let mut rows_constrs: Vec<SMTExpr> = vec![];
         let mut next_constrs: Vec<SMTExpr> = vec![];
 
-        let all_vars = [
-            unknown_non_lookup_constants,
-            collector.vars.iter().collect::<Vec<_>>(),
-        ]
-        .concat();
+        let all_vars = const_collector
+            .consts
+            .iter()
+            .chain(collector.vars.iter())
+            .collect::<Vec<_>>();
 
         // Unroll the state machine `rows` times
         // state_machine(row_i, input_row_i, out_row_i, out_next_row_i)
