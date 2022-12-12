@@ -190,8 +190,11 @@ impl SmtEncoder {
                 _ => panic!(),
             }
         });
+
+        let smt_row_arg = SMTVariable::new("row".to_string(), SMTSort::Int);
         // Add `row` to the state machine input.
-        let mut smt_vars: Vec<_> = vec![SMTVariable::new("row".to_string(), SMTSort::Int)];
+        let mut smt_vars: Vec<_> = vec![smt_row_arg.clone()];
+
         // Make SMT vars for the constants.
         smt_vars.extend(
             const_collector
@@ -218,13 +221,32 @@ impl SmtEncoder {
         let state_machine_decl =
             SMTFunction::new("state_machine".to_string(), SMTSort::Bool, smt_vars);
         // Add the UF application of every constraint to the body of the state machine.
-        // This includes constraints and lookups.
-        // TODO add constraints for the constants that are used in identities.
+        // This includes constraints, lookups and constants.
         let body = and_vec(
-            self.funs
-                .iter()
-                .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
-                .collect::<Vec<_>>(),
+            [
+                self.funs
+                    .iter()
+                    .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
+                    .collect::<Vec<_>>(),
+                const_collector
+                    .consts
+                    .iter()
+                    .filter_map(|c| {
+                        self.lookup_constants
+                            .known_lookup_constant_as_function(c)
+                            .map(|f| {
+                                uf(
+                                    f,
+                                    vec![
+                                        smt_row_arg.clone().into(),
+                                        self.pol_to_smt_var(c, None).into(),
+                                    ],
+                                )
+                            })
+                    })
+                    .collect::<Vec<_>>(),
+            ]
+            .concat(),
         );
 
         self.out(define_fun(state_machine_decl.clone(), body));
@@ -236,11 +258,11 @@ impl SmtEncoder {
         let mut rows_constrs: Vec<SMTExpr> = vec![];
         let mut next_constrs: Vec<SMTExpr> = vec![];
 
-        let all_vars = [
-            const_collector.consts.iter().collect::<Vec<_>>(),
-            collector.vars.iter().collect::<Vec<_>>(),
-        ]
-        .concat();
+        let all_vars = const_collector
+            .consts
+            .iter()
+            .chain(collector.vars.iter())
+            .collect::<Vec<_>>();
 
         // Unroll the state machine `rows` times
         // state_machine(row_i, input_row_i, out_row_i, out_next_row_i)
@@ -438,11 +460,7 @@ impl Visitor for SmtEncoder {
                 .map(|lookup| match &ctx.expressions[lookup.0] {
                     Expression::Const(w) => {
                         let lookup = w.inner.to_polynomial(ctx);
-                        if self
-                            .lookup_constants
-                            .known_lookup_constant_escaped(&lookup)
-                            .is_none()
-                        {
+                        if !self.lookup_constants.is_known_constant(&lookup) {
                             panic!("const {} in plookup is not known", lookup);
                         }
                         lookup
