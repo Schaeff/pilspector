@@ -235,11 +235,21 @@ fn known_constants() -> BTreeMap<String, SMTStatement> {
         ),
     );
 
+    // This is an auxiliary function used by P_A and P_C.
+    // The name of this function needs to be < than the names
+    // of the functions that use it, because it needs to
+    // appear before them in the smt2 file.
+    let p_a_function = SMTFunction::new("Binary_0_P_A".to_string(), SMTSort::Int, vec![r.clone()]);
+    result.insert(
+        "Binary.0_P_A_function".to_string(),
+        define_fun(p_a_function.clone(), modulo(div(r.clone(), 256), 256)),
+    );
+
     result.insert(
         "Binary.P_A".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_A".to_string()),
-            eq(v.clone(), modulo(div(r.clone(), 256), 256)),
+            eq(v.clone(), uf(p_a_function, vec![r.clone().into()])),
         ),
     );
 
@@ -264,7 +274,7 @@ fn known_constants() -> BTreeMap<String, SMTStatement> {
         "Binary.P_CIN".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_CIN".to_string()),
-            eq(v.clone(), modulo(div(r.clone(), 65536), 2))
+            eq(v, modulo(div(r, 65536), 2)),
         ),
     );
 
