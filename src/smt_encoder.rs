@@ -190,12 +190,20 @@ impl SmtEncoder {
                 _ => panic!(),
             }
         });
-        // Add `row` to the state machine input.
-        let mut smt_vars: Vec<_> = vec![SMTVariable::new("row".to_string(), SMTSort::Int)];
-        // Make SMT vars for the constants.
-        smt_vars.extend(
+
+        let (known_non_lookup_constants, unknown_non_lookup_constants): (Vec<_>, Vec<_>) =
             const_collector
                 .consts
+                .iter()
+                .partition(|c| self.lookup_constants.known_lookup_constant(c).is_some());
+
+        let smt_row_arg = SMTVariable::new("row".to_string(), SMTSort::Int);
+        // Add `row` to the state machine input.
+        let mut smt_vars: Vec<_> = vec![smt_row_arg.clone()];
+
+        // Make SMT vars for the unknown constants.
+        smt_vars.extend(
+            unknown_non_lookup_constants
                 .iter()
                 .map(|pol| self.pol_to_smt_var(pol, None))
                 .collect::<Vec<_>>(),
@@ -219,12 +227,28 @@ impl SmtEncoder {
             SMTFunction::new("state_machine".to_string(), SMTSort::Bool, smt_vars);
         // Add the UF application of every constraint to the body of the state machine.
         // This includes constraints and lookups.
-        // TODO add constraints for the constants that are used in identities.
         let body = and_vec(
-            self.funs
-                .iter()
-                .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
-                .collect::<Vec<_>>(),
+            [
+                self.funs
+                    .iter()
+                    .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
+                    .collect::<Vec<_>>(),
+                known_non_lookup_constants
+                    .iter()
+                    .map(|c| {
+                        uf(
+                            self.lookup_constants
+                                .known_lookup_constant_as_function(c)
+                                .unwrap(),
+                            vec![
+                                smt_row_arg.clone().into(),
+                                self.pol_to_smt_var(c, None).into(),
+                            ],
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            ]
+            .concat(),
         );
 
         self.out(define_fun(state_machine_decl.clone(), body));
@@ -237,7 +261,7 @@ impl SmtEncoder {
         let mut next_constrs: Vec<SMTExpr> = vec![];
 
         let all_vars = [
-            const_collector.consts.iter().collect::<Vec<_>>(),
+            unknown_non_lookup_constants,
             collector.vars.iter().collect::<Vec<_>>(),
         ]
         .concat();

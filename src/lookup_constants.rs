@@ -4,15 +4,20 @@ use crate::ast::*;
 use crate::smt::*;
 use crate::smt_encoder::escape_identifier;
 
-pub fn constant_lookup_function(name: String) -> SMTFunction {
+fn constant_lookup_function(name: String) -> SMTFunction {
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
     let v = SMTVariable::new("v".to_string(), SMTSort::Int);
     SMTFunction::new(name, SMTSort::Bool, vec![r, v])
 }
 
+fn escape_constant(name: String) -> String {
+    format!("const_{}", escape_identifier(&name))
+}
+
 #[derive(Debug, Clone)]
 pub struct LookupConstants {
-    /// Definition of constant lookups that can be arbitrarily combined with other lookups.
+    /// Definition of constants so that they can also be used in lookups and
+    /// arbitrarily combined with other lookups.
     /// The statement should be SMT functions of the form
     /// (define-fun <constant name> ((row Int) (v Int)) Bool ...)
     /// that return true if and only if the constant value in row `row`
@@ -49,8 +54,15 @@ impl LookupConstants {
     }
 
     pub fn known_lookup_constant_escaped(&self, lookup: &ShiftedPolynomial) -> Option<String> {
-        self.known_lookup_constant(lookup)
-            .map(|name| escape_identifier(&name))
+        self.known_lookup_constant(lookup).map(escape_constant)
+    }
+
+    pub fn known_lookup_constant_as_function(
+        &self,
+        lookup: &ShiftedPolynomial,
+    ) -> Option<SMTFunction> {
+        self.known_lookup_constant_escaped(lookup)
+            .map(constant_lookup_function)
     }
 
     pub fn encode_lookup(&self, lhs: Vec<SMTExpr>, rhs: Vec<ShiftedPolynomial>) -> SMTExpr {
@@ -99,6 +111,16 @@ impl LookupConstants {
     }
 }
 
+fn add_constant(result: &mut BTreeMap<String, SMTStatement>, name: &str, body: SMTExpr) {
+    result.insert(
+        name.to_string(),
+        define_fun(
+            constant_lookup_function(escape_constant(name.to_string())),
+            body,
+        ),
+    );
+}
+
 fn known_constants() -> BTreeMap<String, SMTStatement> {
     let mut result = BTreeMap::new();
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
@@ -107,51 +129,43 @@ fn known_constants() -> BTreeMap<String, SMTStatement> {
         constant_lookup_function(String::new()).args,
         vec![r.clone(), v.clone()]
     );
-    result.insert(
-        "Global.BYTE2".to_string(),
-        define_fun(
-            constant_lookup_function("Global_BYTE2".to_string()),
-            and_vec(vec![
-                eq(r.clone(), v.clone()), // strictly, r % 2**16 = v - this is important if this is used together with another constant in the same lookup
-                ge(v.clone(), 0),
-                le(v.clone(), u16::MAX as u64),
-            ]),
+    add_constant(
+        &mut result,
+        "Global.BYTE2",
+        and_vec(vec![
+            eq(r.clone(), v.clone()), // strictly, r % 2**16 = v - this is important if this is used together with another constant in the same lookup
+            ge(v.clone(), 0),
+            le(v.clone(), u16::MAX as u64),
+        ]),
+    );
+    add_constant(
+        &mut result,
+        "Global.BYTE",
+        and_vec(vec![
+            eq(r.clone(), v.clone()), // strictly, r % 2**8 = v - this is important if this is used together with another constant in the same lookup
+            ge(v.clone(), 0),
+            le(v.clone(), u8::MAX as u64),
+        ]),
+    );
+    add_constant(
+        &mut result,
+        "Arith.SEL_BYTE2_BIT19",
+        ite(
+            le(r.clone(), u16::MAX as u64),
+            eq(v.clone(), 0),
+            eq(v.clone(), 1),
         ),
     );
-    result.insert(
-        "Global.BYTE".to_string(),
-        define_fun(
-            constant_lookup_function("Global_BYTE".to_string()),
-            and_vec(vec![
-                eq(r.clone(), v.clone()), // strictly, r % 2**8 = v - this is important if this is used together with another constant in the same lookup
-                ge(v.clone(), 0),
-                le(v.clone(), u8::MAX as u64),
-            ]),
-        ),
-    );
-    result.insert(
-        "Arith.SEL_BYTE2_BIT19".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_SEL_BYTE2_BIT19".to_string()),
-            ite(
-                le(r.clone(), u16::MAX as u64),
-                eq(v.clone(), 0),
-                eq(v.clone(), 1),
-            ),
-        ),
-    );
-    result.insert(
-        "Arith.BYTE2_BIT19".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_BYTE2_BIT19".to_string()),
-            // definition is: v == r % (2**16 + 2**19)
-            // TODO This is not modeled below.
-            and_vec(vec![
-                eq(r.clone(), v.clone()),
-                ge(v.clone(), 0),
-                le(v.clone(), ((1 << 16) + (1 << 19)) - 1),
-            ]),
-        ),
+    add_constant(
+        &mut result,
+        "Arith.BYTE2_BIT19",
+        // definition is: v == r % (2**16 + 2**19)
+        // TODO This is not modeled below.
+        and_vec(vec![
+            eq(r.clone(), v.clone()),
+            ge(v.clone(), 0),
+            le(v.clone(), ((1 << 16) + (1 << 19)) - 1),
+        ]),
     );
     // All the GL_SIGNED constants are built in the same way, with parameters
     // from, to, steps:
@@ -187,106 +201,54 @@ fn known_constants() -> BTreeMap<String, SMTStatement> {
             unimplemented!()
         }
     }
-    result.insert(
-        "Arith.GL_SIGNED_4BITS_C0".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_GL_SIGNED_4BITS_C0".to_string()),
-            range_constant(-16, 16, 1),
-        ),
+    add_constant(
+        &mut result,
+        "Arith.GL_SIGNED_4BITS_C0",
+        range_constant(-16, 16, 1),
     );
-    result.insert(
-        "Arith.GL_SIGNED_4BITS_C1".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_GL_SIGNED_4BITS_C1".to_string()),
-            range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33
-        ),
+    add_constant(
+        &mut result,
+        "Arith.GL_SIGNED_4BITS_C1",
+        range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33
     );
-    result.insert(
-        "Arith.GL_SIGNED_4BITS_C2".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_GL_SIGNED_4BITS_C2".to_string()),
-            range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33 * 33
-        ),
+    add_constant(
+        &mut result,
+        "Arith.GL_SIGNED_4BITS_C2",
+        range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33 * 33
     );
-    result.insert(
-        "Arith.GL_SIGNED_18BITS".to_string(),
-        define_fun(
-            constant_lookup_function("Arith_GL_SIGNED_18BITS".to_string()),
-            range_constant(-(1 << 18), 1 << 18, 1),
+    add_constant(
+        &mut result,
+        "Arith.GL_SIGNED_18BITS",
+        range_constant(-(1 << 18), 1 << 18, 1),
+    );
+
+    add_constant(
+        &mut result,
+        "Binary.P_LAST",
+        eq(
+            v.clone(),
+            modulo(div(r.clone(), 131072 /* 256 * 256 * 2 */), 2),
         ),
     );
 
-    result.insert(
-        "Binary.P_LAST".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_LAST".to_string()),
-            eq(
-                v.clone(),
-                modulo(div(r.clone(), 131072 /* 256 * 256 * 2 */), 2),
-            ),
-        ),
+    add_constant(
+        &mut result,
+        "Binary.P_OPCODE",
+        eq(v.clone(), div(r.clone(), 262144 /* 256 * 256 * 2 * 2*/)),
     );
 
-    result.insert(
-        "Binary.P_OPCODE".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_OPCODE".to_string()),
-            eq(v.clone(), div(r.clone(), 262144 /* 256 * 256 * 2 * 2*/)),
-        ),
-    );
-
-    result.insert(
-        "Binary.P_A".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_A".to_string()),
-            eq(v, modulo(div(r, 256), 256)),
-        ),
-    );
+    add_constant(&mut result, "Binary.P_A", eq(v, modulo(div(r, 256), 256)));
 
     // TODO
-    result.insert(
-        "Binary.P_B".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_B".to_string()),
-            literal_true(),
-        ),
-    );
-
+    add_constant(&mut result, "Binary.P_B", literal_true());
     // TODO
-    result.insert(
-        "Binary.P_C".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_C".to_string()),
-            literal_true(),
-        ),
-    );
-
+    add_constant(&mut result, "Binary.P_C", literal_true());
     // TODO
-    result.insert(
-        "Binary.P_CIN".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_CIN".to_string()),
-            literal_true(),
-        ),
-    );
-
+    add_constant(&mut result, "Binary.P_CIN", literal_true());
     // TODO
-    result.insert(
-        "Binary.P_COUT".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_COUT".to_string()),
-            literal_true(),
-        ),
-    );
-
+    add_constant(&mut result, "Binary.P_COUT", literal_true());
     // TODO
-    result.insert(
-        "Binary.P_USE_CARRY".to_string(),
-        define_fun(
-            constant_lookup_function("Binary_P_USE_CARRY".to_string()),
-            literal_true(),
-        ),
-    );
+    add_constant(&mut result, "Binary.P_USE_CARRY", literal_true());
 
     result
 }
