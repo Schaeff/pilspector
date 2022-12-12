@@ -8,12 +8,15 @@ import os
 def all_values(func_name):
     s = z3.Solver()
     s.from_string(open('constants.smt', 'r').read() +
-                  f'\n(declare-const val Int)\n(declare-const row Int)\n(assert ({func_name} row val))')
-    val = z3.Int('val')
+                  f'\n(declare-const row Int)\n(declare-const val Int)\n(assert ({func_name} row val))')
     row = z3.Int('row')
+    val = z3.Int('val')
     for i in range(2097152):
-        s.check(row == i)
+        s.push()
+        s.add(row == i)
+        s.check()
         yield s.model()[val]
+        s.pop()
 
 
 def output_function(func_name):
