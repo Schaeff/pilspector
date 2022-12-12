@@ -47,7 +47,10 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
         "Binary.P_LAST".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_LAST".to_string()),
-            eq(v.clone(), modulo(div(r.clone(), 131072 /* 256 * 256 * 2 */ ), 2))
+            eq(
+                v.clone(),
+                modulo(div(r.clone(), 131072 /* 256 * 256 * 2 */), 2),
+            ),
         ),
     );
 
@@ -55,7 +58,7 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
         "Binary.P_OPCODE".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_OPCODE".to_string()),
-            eq(v.clone(), div(r.clone(), 262144 /* 256 * 256 * 2 * 2*/ ))
+            eq(v.clone(), div(r.clone(), 262144 /* 256 * 256 * 2 * 2*/)),
         ),
     );
 
@@ -63,7 +66,7 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
         "Binary.P_A".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_A".to_string()),
-            eq(v.clone(), modulo(div(r.clone(), 256), 256))
+            eq(v.clone(), modulo(div(r.clone(), 256), 256)),
         ),
     );
 
@@ -72,7 +75,7 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
         "Binary.P_B".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_B".to_string()),
-            literal_true()
+            literal_true(),
         ),
     );
 
@@ -81,7 +84,7 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
         "Binary.P_C".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_C".to_string()),
-            literal_true()
+            literal_true(),
         ),
     );
 
@@ -90,7 +93,7 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
         "Binary.P_CIN".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_CIN".to_string()),
-            literal_true()
+            literal_true(),
         ),
     );
 
@@ -99,7 +102,7 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
         "Binary.P_COUT".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_COUT".to_string()),
-            literal_true()
+            literal_true(),
         ),
     );
 
@@ -108,7 +111,7 @@ pub fn known_constants() -> BTreeMap<String, SMTStatement> {
         "Binary.P_USE_CARRY".to_string(),
         define_fun(
             constant_lookup_function("Binary_P_USE_CARRY".to_string()),
-            literal_true()
+            literal_true(),
         ),
     );
 
@@ -317,7 +320,7 @@ impl Visitor for VariableCollector {
 
     fn visit_const(&mut self, c: &Const, ctx: &Pil) -> Result<Self::Error> {
         let pol = c.to_polynomial(ctx);
-        self.vars.insert(pol);
+        self.consts.insert(pol);
         Ok(())
     }
 }
@@ -343,14 +346,13 @@ impl SmtEncoder {
         let mut collector = VariableCollector::new();
         let constr = &ctx.expressions[i.e.0];
         collector.visit_expression(constr, ctx).unwrap();
-        let smt_vars: Vec<_> = [
-            collector.consts.iter().collect::<Vec<_>>(),
-            collector.vars.iter().collect::<Vec<_>>(),
-        ]
-        .concat()
-        .iter()
-        .map(|(key, next)| self.key_to_smt_var(key, *next, None))
-        .collect();
+
+        let smt_vars: Vec<_> = collector
+            .consts
+            .iter()
+            .chain(collector.vars.iter())
+            .map(|pol| self.pol_to_smt_var(pol, None))
+            .collect();
         SMTFunction::new(format!("constr_{}", constr_idx), SMTSort::Bool, smt_vars)
     }
 
@@ -383,21 +385,20 @@ impl SmtEncoder {
             const_collector
                 .consts
                 .iter()
-                .map(|(key, next)| self.key_to_smt_var(key, *next, None))
+                .map(|pol| self.pol_to_smt_var(pol, None))
                 .collect::<Vec<_>>(),
         );
 
         // Collect `pol commit` variables.
         let mut collector = VariableCollector::new();
         collector.visit_pil(p).unwrap();
+
         // Make SMT vars for `pol commit` variables.
-        smt_vars.extend(
-            collector
-                .vars
-                .iter()
-                .map(|(key, next)| self.key_to_smt_var(key, *next, None))
-                .collect::<Vec<_>>(),
-        );
+        let smt_vars: Vec<_> = collector
+            .vars
+            .iter()
+            .map(|pol| self.pol_to_smt_var(pol, None))
+            .collect();
 
         // Declare the state machine's function.
         let state_machine_decl =
@@ -452,35 +453,33 @@ impl SmtEncoder {
                 // Add row to the state machine arguments
                 inner_decls.insert(smt_row.clone());
 
-                all_vars.iter().for_each(|(key, next)| {
+                all_vars.iter().for_each(|pol| {
                     // Create and declare the variable for this row and execution.
                     let smt_var =
-                        self.key_to_smt_var(key, *next, Some(format!("_row{}_exec{}", row, exec)));
+                        self.pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec)));
                     inner_decls.insert(smt_var.clone());
 
                     // Bind `var` and `next_var` in two sequential rows in the same execution.
-                    if row > 0 && !*next {
-                        let prev_smt_var = self.key_to_smt_var(
-                            key,
-                            true,
-                            Some(format!("_row{}_exec{}", row - 1, exec)),
-                        );
-                        decls.insert(prev_smt_var.clone());
-                        next_constrs.push(eq(smt_var.clone(), prev_smt_var));
+                    if row > 0 {
+                        if let Some(ref pol_next) = pol.next() {
+                            let prev_smt_var = self.pol_to_smt_var(
+                                pol_next,
+                                Some(format!("_row{}_exec{}", row - 1, exec)),
+                            );
+                            decls.insert(prev_smt_var.clone());
+                            next_constrs.push(eq(smt_var.clone(), prev_smt_var));
+                        }
                     }
 
                     // Bind two input variables of same row and different execution.
                     if exec > 0
                         && self
                             .in_vars
-                            .get(&self.key_to_smt_var(key, *next, None).name)
+                            .get(&self.pol_to_smt_var(pol, None).name)
                             .is_some()
                     {
-                        let other_exec_smt_var = self.key_to_smt_var(
-                            key,
-                            *next,
-                            Some(format!("_row{}_exec{}", row, exec - 1)),
-                        );
+                        let other_exec_smt_var =
+                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec - 1)));
                         assert!(decls.get(&other_exec_smt_var).is_some());
                         next_constrs.push(eq(smt_var, other_exec_smt_var));
                     }
@@ -511,23 +510,15 @@ impl SmtEncoder {
             let query = not(and_vec(
                 all_vars
                     .iter()
-                    .filter(|(key, next)| {
+                    .filter(|pol| {
                         self.out_vars
-                            .get(&self.key_to_smt_var(key, *next, None).name)
+                            .get(&self.pol_to_smt_var(pol, None).name)
                             .is_some()
                     })
-                    .map(|(key, next)| {
+                    .map(|pol| {
                         eq(
-                            self.key_to_smt_var(
-                                key,
-                                *next,
-                                Some(format!("_row{}_exec0", rows - 1)),
-                            ),
-                            self.key_to_smt_var(
-                                key,
-                                *next,
-                                Some(format!("_row{}_exec1", rows - 1)),
-                            ),
+                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec0", rows - 1))),
+                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec1", rows - 1))),
                         )
                     })
                     .collect::<Vec<_>>(),
