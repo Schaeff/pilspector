@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{
     ast::{
@@ -17,7 +17,7 @@ pub struct PatternDetector {
     occurrences: Vec<(Expression, String)>,
 }
 
-pub type SymbolicAssignment = HashMap<ShiftedPolynomial, Expression>;
+pub type SymbolicAssignment = BTreeMap<ShiftedPolynomial, Expression>;
 
 impl PatternDetector {
     pub fn detect(pil: &Pil, pattern_pil: &Pil) -> Vec<(String, String)> {
@@ -56,7 +56,7 @@ impl PatternDetector {
             &self.pattern,
             &self.pil,
             &self.pattern_pil,
-            HashMap::default(),
+            BTreeMap::default(),
         )
     }
 }
