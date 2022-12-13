@@ -286,12 +286,13 @@ impl SmtEncoder {
         )
     }
 
-    fn encode_state_machine(&mut self, p: &Pil) {
-        // Encode the machine for a single step / row
-        let (state_machine_decl, all_vars) = self.encode_state_machine_step(p);
-
-        // Create the main query.
-
+    fn encode_state_machine_unrolled(
+        &mut self,
+        state_machine_decl: SMTFunction,
+        all_vars: Vec<ShiftedPolynomial>,
+        rows: usize,
+        executions: usize,
+    ) {
         let mut decls: BTreeSet<SMTVariable> = BTreeSet::default();
         let mut appls: Vec<SMTExpr> = vec![];
         let mut rows_constrs: Vec<SMTExpr> = vec![];
@@ -299,7 +300,7 @@ impl SmtEncoder {
 
         // Unroll the state machine `rows` times
         // state_machine(row_i, input_row_i, out_row_i, out_next_row_i)
-        (0..self.rows).for_each(|row| {
+        (0..rows).for_each(|row| {
             // Create a `row` variable for each row.
             let smt_row = SMTVariable::new(format!("row{}", row), SMTSort::Int);
 
@@ -315,7 +316,7 @@ impl SmtEncoder {
             // we can query whether they can be different.
             // state_machine(row_i, input_row_i_exec_0, out_row_i_exec_0, out_next_row_i_exec_0)
             // state_machine(row_i, input_row_i_exec_1, out_row_i_exec_1, out_next_row_i_exec_1)
-            (0..=1).for_each(|exec| {
+            (0..executions).for_each(|exec| {
                 // Create the state machine arguments
                 let mut inner_decls: Vec<SMTVariable> = vec![];
 
@@ -373,6 +374,15 @@ impl SmtEncoder {
         statements.push(assert(and_vec(
             vec![rows_constrs, next_constrs, appls].concat(),
         )));
+        self.out_vec(statements);
+    }
+
+    fn encode_state_machine_determinism(&mut self, p: &Pil) {
+        // Encode the machine for a single step / row
+        let (state_machine_decl, all_vars) = self.encode_state_machine_step(p);
+
+        // Unroll it for "rows" rows and two executions.
+        self.encode_state_machine_unrolled(state_machine_decl, all_vars.clone(), self.rows, 2);
 
         if !self.out_vars.is_empty() {
             // Create nondeterminism query
@@ -393,10 +403,8 @@ impl SmtEncoder {
                     .collect::<Vec<_>>(),
             ));
 
-            statements.push(assert(query));
+            self.out(assert(query));
         }
-
-        self.out_vec(statements);
     }
 }
 
@@ -422,7 +430,7 @@ impl Visitor for SmtEncoder {
             self.visit_polynomial_identity(identity, ctx, index)?;
         }
 
-        self.encode_state_machine(p);
+        self.encode_state_machine_determinism(p);
 
         Ok(())
     }
