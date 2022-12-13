@@ -17,6 +17,7 @@ pub struct SmtPil {
     lookup_constants: LookupConstants,
     in_vars: BTreeSet<String>,
     out_vars: BTreeSet<String>,
+    rows: usize,
 }
 
 impl SmtPil {
@@ -25,12 +26,14 @@ impl SmtPil {
         lookup_constants: LookupConstants,
         in_vars: BTreeSet<String>,
         out_vars: BTreeSet<String>,
+        rows: usize,
     ) -> Self {
         Self {
             pil,
             lookup_constants,
             in_vars,
             out_vars,
+            rows,
         }
     }
 }
@@ -47,6 +50,7 @@ pub struct SmtEncoder {
     lookup_constants: LookupConstants,
     in_vars: BTreeSet<String>,
     out_vars: BTreeSet<String>,
+    rows: usize,
 }
 
 impl SmtEncoder {
@@ -68,6 +72,7 @@ impl fmt::Display for SmtPil {
             lookup_constants: self.lookup_constants.clone(),
             in_vars: self.in_vars.clone(),
             out_vars: self.out_vars.clone(),
+            rows: self.rows,
         };
         encoder.define_constants();
         encoder.visit_pil(&self.pil)?;
@@ -164,7 +169,7 @@ impl SmtEncoder {
         }
     }
 
-    fn encode_state_machine(&mut self, p: &Pil, rows: usize) {
+    fn encode_state_machine(&mut self, p: &Pil) {
         // Collect only constants that appear in constraints or
         // LHS of plookups.
         // Constants that appear only in the RHS of a lookup
@@ -249,6 +254,13 @@ impl SmtEncoder {
             .concat(),
         );
 
+        // Warn about constants that are not constrained by a lookup.
+        const_collector
+            .consts
+            .iter()
+            .filter(|c| !self.lookup_constants.is_known_constant(c))
+            .for_each(|c| println!("Constant {} used in constraints has no lookup function.", c));
+
         self.out(define_fun(state_machine_decl.clone(), body));
 
         // Create the main query.
@@ -266,7 +278,7 @@ impl SmtEncoder {
 
         // Unroll the state machine `rows` times
         // state_machine(row_i, input_row_i, out_row_i, out_next_row_i)
-        (0..rows).for_each(|row| {
+        (0..self.rows).for_each(|row| {
             // Create a `row` variable for each row.
             let smt_row = SMTVariable::new(format!("row{}", row), SMTSort::Int);
 
@@ -353,8 +365,8 @@ impl SmtEncoder {
                     })
                     .map(|pol| {
                         eq(
-                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec0", rows - 1))),
-                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec1", rows - 1))),
+                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec0", self.rows - 1))),
+                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec1", self.rows - 1))),
                         )
                     })
                     .collect::<Vec<_>>(),
@@ -389,7 +401,7 @@ impl Visitor for SmtEncoder {
             self.visit_polynomial_identity(identity, ctx, index)?;
         }
 
-        self.encode_state_machine(p, 3);
+        self.encode_state_machine(p);
 
         Ok(())
     }
@@ -569,6 +581,7 @@ mod test {
             LookupConstants::new(),
             BTreeSet::default(),
             BTreeSet::default(),
+            3,
         );
 
         println!("{}", smt_pil);
@@ -584,6 +597,7 @@ mod test {
             LookupConstants::new(),
             BTreeSet::default(),
             BTreeSet::default(),
+            3,
         );
 
         println!("{}", smt_pil);

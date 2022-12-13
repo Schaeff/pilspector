@@ -45,6 +45,13 @@ pub struct Args {
     pub out_vars: Option<String>,
     #[clap(
         long,
+        short = 'r',
+        value_name = "ROWS",
+        help = "The number of rows to be unrolled."
+    )]
+    pub rows: Option<usize>,
+    #[clap(
+        long,
         short = 's',
         default_value = "z3",
         value_name = "SMT_SOLVER",
@@ -80,7 +87,8 @@ fn main() {
                 BTreeSet::default()
             };
 
-            let smt_pil = SmtPil::new(pil, LookupConstants::new(), in_vars, out_vars);
+            let rows = if let Some(r) = args.rows { r } else { 3 };
+            let smt_pil = SmtPil::new(pil, LookupConstants::new(), in_vars, out_vars, rows);
 
             if args.dump_query {
                 println!("{}", smt_pil);
