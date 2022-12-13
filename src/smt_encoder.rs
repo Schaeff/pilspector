@@ -242,7 +242,7 @@ impl SmtEncoder {
                     .filter_map(|c| {
                         let (pol, next) = c.clone().decompose();
                         self.lookup_constants
-                            .known_lookup_constant_as_function(&pol.into())
+                            .known_lookup_constant_as_predicate(&pol.into())
                             .map(|f| {
                                 uf(
                                     f,

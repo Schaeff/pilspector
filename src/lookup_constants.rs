@@ -4,20 +4,20 @@ use crate::ast::*;
 use crate::smt::*;
 use crate::smt_encoder::escape_identifier;
 
-fn constant_lookup_function(name: String) -> SMTFunction {
+fn constant_lookup_predicate(name: String) -> SMTFunction {
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
     let v = SMTVariable::new("v".to_string(), SMTSort::Int);
     SMTFunction::new(name, SMTSort::Bool, vec![r, v])
 }
 
-fn constant_lookup_function_function(name: String) -> SMTFunction {
+fn constant_lookup_function(name: String) -> SMTFunction {
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
     SMTFunction::new(name, SMTSort::Int, vec![r])
 }
 
-fn constant_lookup_function_function_appl(name: String, args: Vec<SMTExpr>) -> SMTExpr {
+fn constant_lookup_function_appl(name: String, args: Vec<SMTExpr>) -> SMTExpr {
     uf(
-        constant_lookup_function_function(format!("{}_function", escape_identifier(name.as_str()))),
+        constant_lookup_function(format!("{}_function", escape_identifier(name.as_str()))),
         args,
     )
 }
@@ -80,13 +80,13 @@ impl LookupConstants {
             .map(|(p, _)| p.clone())
     }
 
-    pub fn known_lookup_constant_as_function(
+    pub fn known_lookup_constant_as_predicate(
         &self,
         lookup: &ShiftedPolynomial,
     ) -> Option<SMTFunction> {
         self.known_lookup_constant(lookup)
             .map(constant_function_name)
-            .map(constant_lookup_function)
+            .map(constant_lookup_predicate)
     }
 
     pub fn encode_lookup(&self, lhs: Vec<SMTExpr>, rhs: Vec<ShiftedPolynomial>) -> SMTExpr {
@@ -112,7 +112,7 @@ impl LookupConstants {
                             .zip(rhs.iter())
                             .map(|(expr, constant)| {
                                 uf(
-                                    self.known_lookup_constant_as_function(constant).unwrap(),
+                                    self.known_lookup_constant_as_predicate(constant).unwrap(),
                                     vec![row.clone().into(), expr],
                                 )
                             })
@@ -155,7 +155,7 @@ fn add_constant_function_poly(
     let f_name = format!("{}_function", escape_identifier(&poly.to_string()));
     result.insert(
         poly,
-        define_fun(constant_lookup_function_function(f_name), body),
+        define_fun(constant_lookup_function(f_name), body),
     );
 }
 
@@ -171,7 +171,7 @@ fn add_constant_poly(
 ) {
     result.insert(
         poly.clone(),
-        define_fun(constant_lookup_function(constant_function_name(poly)), body),
+        define_fun(constant_lookup_predicate(constant_function_name(poly)), body),
     );
 }
 
@@ -190,7 +190,7 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
     let v = SMTVariable::new("v".to_string(), SMTSort::Int);
     assert_eq!(
-        constant_lookup_function(String::new()).args,
+        constant_lookup_predicate(String::new()).args,
         vec![r.clone(), v.clone()]
     );
     add_constant(
@@ -246,7 +246,7 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         let r = SMTVariable::new("r".to_string(), SMTSort::Int);
         let v = SMTVariable::new("v".to_string(), SMTSort::Int);
         assert_eq!(
-            constant_lookup_function(String::new()).args,
+            constant_lookup_predicate(String::new()).args,
             vec![r.clone(), v.clone()]
         );
         assert!(end >= start);
@@ -308,7 +308,7 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         "Binary.P_A",
         eq(
             v.clone(),
-            constant_lookup_function_function_appl(
+            constant_lookup_function_appl(
                 "Binary.P_A".to_string(),
                 vec![r.clone().into()],
             ),
