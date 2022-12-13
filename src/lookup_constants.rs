@@ -257,7 +257,11 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         eq(v.clone(), ite(eq_zero(modulo(r.clone(), 2)), 1, 0)),
     );
 
-    add_constant(&mut result, "Binary.P_A", eq(v, modulo(div(r, 256), 256)));
+    add_constant(
+        &mut result,
+        "Binary.P_A",
+        eq(v.clone(), modulo(div(r.clone(), 256), 256)),
+    );
 
     // TODO
     add_constant(&mut result, "Binary.P_B", literal_true());
@@ -269,6 +273,11 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     add_constant(&mut result, "Binary.P_COUT", literal_true());
     // TODO
     add_constant(&mut result, "Binary.P_USE_CARRY", literal_true());
+    add_constant(
+        &mut result,
+        "Binary.RESET",
+        eq(v, ite(eq(modulo(r, 8 * 4), 0), 1, 0)),
+    );
 
     result
 }
