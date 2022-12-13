@@ -4,6 +4,7 @@ pub mod ast;
 // mod constants;
 mod displayer;
 mod folder;
+pub mod lookup_constants;
 mod smt;
 pub mod smt_encoder;
 pub mod solver;
