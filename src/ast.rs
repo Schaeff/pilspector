@@ -221,6 +221,10 @@ impl ShiftedPolynomial {
     pub fn polynomial(&self) -> &Polynomial {
         &self.pol
     }
+
+    pub fn decompose(self) -> (Polynomial, bool) {
+        (self.pol, self.next)
+    }
 }
 
 impl Polynomial {
