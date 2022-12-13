@@ -10,7 +10,7 @@ use crate::{
 
 pub type FieldElement = String;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Pil {
@@ -191,20 +191,10 @@ impl ToStringWithContext for Expression {
 pub type PublicCellKey = String;
 pub type Name = String;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ShiftedPolynomial {
-    pol: Polynomial,
-    next: bool,
-}
-
-impl ShiftedPolynomial {
-    // shift this polynomial if it's not already shifted
-    pub fn next(&self) -> Option<Self> {
-        (!self.next).then(|| Self {
-            next: true,
-            ..self.clone()
-        })
-    }
+    pub pol: Polynomial,
+    pub next: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -216,6 +206,20 @@ pub struct Polynomial {
 impl From<Polynomial> for ShiftedPolynomial {
     fn from(pol: Polynomial) -> Self {
         ShiftedPolynomial { pol, next: false }
+    }
+}
+
+impl ShiftedPolynomial {
+    // shift this polynomial if it's not already shifted
+    pub fn next(&self) -> Option<Self> {
+        (!self.next).then(|| Self {
+            next: true,
+            ..self.clone()
+        })
+    }
+
+    pub fn polynomial(&self) -> &Polynomial {
+        &self.pol
     }
 }
 
@@ -275,19 +279,19 @@ impl fmt::Display for Polynomial {
 
 pub type References = BTreeMap<Name, Polynomials>;
 // the index of the expression in the expression list
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct ExpressionId(pub usize);
 // the index of a committed polynomial
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct CommittedPolynomialId(pub usize);
 // the index of a constant polynomial
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct ConstantPolynomialId(pub usize);
 // the index of a public value in the public list
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct PublicId(pub usize);
 // the index of a row
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct RowId(pub usize);
 
 impl From<usize> for ExpressionId {
@@ -320,7 +324,7 @@ impl From<usize> for RowId {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
@@ -341,7 +345,7 @@ impl Polynomials {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PolynomialsInner<Id> {
@@ -374,7 +378,7 @@ pub struct ConstantReference {
     pub len: Option<usize>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicCell {
@@ -387,7 +391,7 @@ pub struct PublicCell {
     pub name: PublicCellKey,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "op")]
@@ -403,7 +407,7 @@ pub enum Expression {
     Const(ExpressionWrapper<Const>),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpressionWrapper<E> {
@@ -436,7 +440,7 @@ impl Expr for Number {}
 impl Expr for Const {}
 impl Expr for Exp {}
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Top {
@@ -444,42 +448,42 @@ pub struct Top {
     deps: Vec<ExpressionId>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Add {
     pub values: Box<[Expression; 2]>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Sub {
     pub values: Box<[Expression; 2]>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Mul {
     pub values: Box<[Expression; 2]>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Neg {
     pub values: Box<[Expression; 1]>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Number {
     pub value: FieldElement,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Const {
@@ -487,7 +491,7 @@ pub struct Const {
     pub next: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Exp {
@@ -495,7 +499,7 @@ pub struct Exp {
     pub next: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Cm {
@@ -503,14 +507,14 @@ pub struct Cm {
     pub next: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Public {
     pub id: PublicId,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PolIdentity {
@@ -520,7 +524,7 @@ pub struct PolIdentity {
     pub location: Location,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PlookupIdentity {
@@ -540,7 +544,7 @@ pub struct PlookupIdentity {
     pub location: Location,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct PermutationIdentity {
@@ -552,7 +556,7 @@ pub struct PermutationIdentity {
     pub location: Location,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionIdentity {
@@ -562,7 +566,7 @@ pub struct ConnectionIdentity {
     pub location: Location,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct Location {

@@ -1,0 +1,4 @@
+namespace Pattern(%N);
+    pol commit cIn, RESET, cOut;
+    cIn' * ( 1 - RESET' ) = cOut * ( 1 - RESET' );
+            

@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use clap::{Parser, Subcommand};
 
+use pilspector::analyser;
 use pilspector::load_pil;
 use pilspector::lookup_constants::LookupConstants;
 use pilspector::smt_encoder::SmtPil;
@@ -20,6 +21,8 @@ pub enum Subcommands {
     Display(Args),
     #[clap(about = "Generate a libSMT for a PIL.")]
     SMT(Args),
+    #[clap(about = "Apply heuristics to find underconstrained variables in PIL")]
+    Analyse(Args),
 }
 
 #[derive(Debug, Clone, Parser, Default)]
@@ -103,6 +106,58 @@ fn main() {
 
             if !error.is_empty() {
                 println!("\nSMT error= {}", error);
+            }
+        }
+        Subcommands::Analyse(args) => {
+            let pil = load_pil(&args.input_file);
+
+            println!();
+            println!("Variables which appear the least in the state machine:");
+
+            let occurences = analyser::OccurrenceCounter::count(&pil);
+            for (pol, (itself, next)) in occurences {
+                println!(
+                    "{} appears {} times ({} times {} + {} times {})",
+                    pol.clone(),
+                    itself + next,
+                    itself,
+                    pol.clone().with_next(false),
+                    next,
+                    pol.with_next(true)
+                );
+            }
+            println!();
+
+            println!("Pattern detection based on `./pil/patterns`");
+
+            for pattern_entry in std::fs::read_dir("pil/patterns").unwrap() {
+                let pattern_path = pattern_entry.unwrap().path();
+                if pattern_path
+                    .extension()
+                    .as_ref()
+                    .map(|e| e.to_str().unwrap())
+                    == Some("pil")
+                {
+                    let pattern_name = pattern_path.file_name().unwrap().to_str().unwrap();
+                    let pattern = load_pil(&pattern_path.display().to_string());
+
+                    println!(
+                        "Search for the `{}` pattern in polynomial identites",
+                        pattern_name
+                    );
+                    let occurences = analyser::PatternDetector::detect(&pil, &pattern);
+                    println!("Found {} occurences:", occurences.len());
+                    for (occurence, assignment) in occurences {
+                        println!("Occurence:");
+                        println!("{}", occurence);
+                        println!();
+                        println!("With assignment:");
+                        println!("{}", assignment);
+                        println!();
+                        println!()
+                    }
+                    println!();
+                }
             }
         }
     }

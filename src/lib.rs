@@ -1,8 +1,9 @@
+pub mod analyser;
 use ast::Pil;
-
 pub mod ast;
 // mod constants;
 mod displayer;
+mod folder;
 pub mod lookup_constants;
 mod smt;
 pub mod smt_encoder;
@@ -10,8 +11,38 @@ pub mod solver;
 mod validator;
 mod visitor;
 
+/// compile a string with pilcom
+pub fn pilcom_from_str(source: &str) -> Result<String, String> {
+    use std::process::Command;
+
+    let dir = tempdir::TempDir::new("pil_input").unwrap();
+    let f = dir.path().join("input.pil");
+    std::fs::write(f.clone(), source).unwrap();
+
+    let dir = tempdir::TempDir::new("pil_output").unwrap();
+    std::fs::create_dir_all(dir.path().join(f.parent().unwrap())).unwrap();
+
+    let out_file = dir.path().join(f.clone()).with_extension("pil.json");
+
+    let res = Command::new("node")
+        .args([
+            "pilcom/src/pil.js",
+            f.as_os_str().to_str().unwrap(),
+            "-o",
+            out_file.as_os_str().to_str().unwrap(),
+        ])
+        .output()
+        .map_err(|err| format!("Could not run pilcom: {}", err))?;
+
+    if !res.status.success() {
+        return Err(String::from_utf8(res.stdout).unwrap());
+    }
+
+    Ok(std::fs::read_to_string(out_file).unwrap())
+}
+
 /// compile a file with pilcom
-pub(crate) fn pilcom(f: &str) -> Result<String, String> {
+pub fn pilcom(f: &str) -> Result<String, String> {
     use std::{path::PathBuf, process::Command};
 
     let f = PathBuf::from(f);
