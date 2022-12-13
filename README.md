@@ -2,16 +2,34 @@
 
 ## Features
 
-- Parse PIL to Rust types
-- Right now that's it
+- Parse `.pil` and `.pil.json`
+- Conversion to smt2, nondeterminism checks
+- Pattern matching on polynomial identities
 
-## Todo
+## Requirements
 
-- [x] Resolve `PolynomialId` references using `References` to get source information
-- [ ] Introduce a second AST which is easier to work with?
-- [x] Basic queries: number of constraints for a given variable, etc
+- rust
+- nodejs
+- z3
 
-## Caveats
+## Setup
 
-- [ ] Not completely sure what the `public` operator takes as argument. Probably a `PolynomialId`
-- [ ] The data structures are not 100% strict: some fields seem to only appear in the list of `Expression` (not in their children). This is not enforced by the types. I suspect it could be fixed in `serde` with flattening but I haven't found a way to make it work.
+```
+git submodule update --init
+cargo run
+```
+
+## Nondeterminism checks
+
+In order to run nondeterminism checks for a state machine, Pilspector requires
+the PIL source code of the state machine, the size of the execution cycle, and
+what are input and output variables in the machine.
+
+Using `byte4.pil` as an example, we have `freeIN` as the input variable, and
+`out` as the output variable in the third row.
+
+```bash
+$ cargo run -- smt pil/zkevm/byte4.pil -i "Byte4_freeIN" -o "Byte4_out" -r 3
+
+State machine is deterministic.
+```
