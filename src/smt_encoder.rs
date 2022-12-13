@@ -54,6 +54,30 @@ pub struct SmtEncoder {
 }
 
 impl SmtEncoder {
+    pub fn determinism_query(
+        pil: &Pil,
+        lookup_constants: LookupConstants,
+        in_vars: BTreeSet<String>,
+        out_vars: BTreeSet<String>,
+        rows: usize,
+    ) -> Vec<SMTStatement> {
+        let mut encoder = SmtEncoder {
+            smt: Vec::default(),
+            funs: Vec::default(),
+            fun_constraints: BTreeMap::default(),
+            lookup_constants,
+            in_vars,
+            out_vars,
+            rows,
+        };
+        encoder.define_constants();
+        encoder.visit_pil(pil).unwrap();
+        encoder.encode_state_machine_determinism(pil);
+        encoder.smt
+    }
+}
+
+impl SmtEncoder {
     fn out(&mut self, statement: SMTStatement) {
         self.smt.push(statement);
     }
@@ -65,17 +89,13 @@ impl SmtEncoder {
 
 impl fmt::Display for SmtPil {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut encoder = SmtEncoder {
-            smt: Vec::default(),
-            funs: Vec::default(),
-            fun_constraints: BTreeMap::default(),
-            lookup_constants: self.lookup_constants.clone(),
-            in_vars: self.in_vars.clone(),
-            out_vars: self.out_vars.clone(),
-            rows: self.rows,
-        };
-        encoder.define_constants();
-        encoder.visit_pil(&self.pil)?;
+        let smt = SmtEncoder::determinism_query(
+            &self.pil,
+            self.lookup_constants.clone(),
+            self.in_vars.clone(),
+            self.out_vars.clone(),
+            self.rows,
+        );
 
         writeln!(
             f,
@@ -84,9 +104,7 @@ impl fmt::Display for SmtPil {
         writeln!(
             f,
             "{}",
-            encoder
-                .smt
-                .iter()
+            smt.iter()
                 .map(|s| s.as_smt())
                 .collect::<Vec<_>>()
                 .join("\n")
@@ -425,8 +443,6 @@ impl Visitor for SmtEncoder {
         for (index, identity) in p.pol_identities.iter().enumerate() {
             self.visit_polynomial_identity(identity, ctx, index)?;
         }
-
-        self.encode_state_machine_determinism(p);
 
         Ok(())
     }
