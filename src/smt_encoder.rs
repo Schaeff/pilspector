@@ -76,6 +76,7 @@ impl fmt::Display for SmtPil {
         };
         encoder.define_constants();
         encoder.visit_pil(&self.pil)?;
+        encoder.encode_state_machine_determinism(&self.pil);
 
         writeln!(
             f,
@@ -425,8 +426,6 @@ impl Visitor for SmtEncoder {
         for (index, identity) in p.pol_identities.iter().enumerate() {
             self.visit_polynomial_identity(identity, ctx, index)?;
         }
-
-        self.encode_state_machine_determinism(p);
 
         Ok(())
     }
