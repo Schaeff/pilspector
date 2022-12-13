@@ -680,6 +680,8 @@ mod test {
         let pil_str = pilcom("pil/zkevm/arith.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
+        // TODO: Maybe we have to run it for 33 iterations,
+        // so that the "next carry" is enforced to be zero again.
         let (query, _vars) = SmtEncoder::encode_unrolled(&pil, LookupConstants::new(), 32);
         query
     }
@@ -688,6 +690,32 @@ mod test {
         pol_to_smt_var_in_row_and_exec(&Polynomial::array_element(name, index).into(), row, 0)
     }
 
+    fn run_query(query: Vec<SMTStatement>) -> String {
+        let (output, error) = solver::query_smt_with_solver(
+            &query
+                .iter()
+                .map(|s| s.as_smt())
+                .collect::<Vec<_>>()
+                .join("\n"),
+            solver::SolverConfig::new("z3"),
+        );
+        assert_eq!(error, String::new());
+        output
+    }
+
+    fn assert_unsat(query: Vec<SMTStatement>) {
+        let output = run_query(query);
+        assert!(
+            output.starts_with("unsat"),
+            "Expected 'unsat' but got {output}"
+        );
+    }
+
+    fn assert_sat(query: Vec<SMTStatement>) {
+        assert!(run_query(query).starts_with("sat"));
+    }
+
+    /// Verify that Arith.x1[0] is constant over a window of size 32
     #[test]
     fn arith_x1_constant() {
         let mut query = setup_arith();
@@ -699,31 +727,23 @@ mod test {
             SMTVariable::new("row0".to_string(), SMTSort::Int),
             0,
         )));
-
-        let (output, _error) = solver::query_smt_with_solver(
-            &query
-                .iter()
-                .map(|s| s.as_smt())
-                .collect::<Vec<_>>()
-                .join("\n"),
-            solver::SolverConfig::new("z3"),
-        );
-
-        println!("{output}");
-
-        assert!(output.starts_with("unsat"));
+        assert_unsat(query);
     }
 
     #[test]
-    fn arith_x1_linear() {
+    fn arith_linear_simple() {
         let mut query = setup_arith();
         query.push(assert(eq(
             SMTVariable::new("row0".to_string(), SMTSort::Int),
             0,
         )));
+        query.push(assert(eq(pol_ar_r_e("Arith.y1", 0, 0), 1)));
         for i in 0..16 {
-            query.push(assert(eq(pol_ar_r_e("Arith.y1", i, 0), 0)));
+            if i > 0 {
+                query.push(assert(eq(pol_ar_r_e("Arith.y1", i, 0), 0)));
+            }
             query.push(assert(eq(pol_ar_r_e("Arith.y2", i, 0), 0)));
+            query.push(assert(eq(pol_ar_r_e("Arith.x2", i, 0), 0)));
         }
         query.push(assert(eq(pol_ar_r_e("Arith.selEq", 0, 0), 1)));
         query.push(assert(eq(pol_ar_r_e("Arith.selEq", 1, 0), 0)));
@@ -734,17 +754,6 @@ mod test {
         query.push(assert(eq(pol_ar_r_e("Arith.y3", 0, 0), 10)));
         query.push(assert(not(eq(pol_ar_r_e("Arith.x1", 0, 0), 10))));
 
-        let (output, _error) = solver::query_smt_with_solver(
-            &query
-                .iter()
-                .map(|s| s.as_smt())
-                .collect::<Vec<_>>()
-                .join("\n"),
-            solver::SolverConfig::new("z3"),
-        );
-
-        println!("{output}");
-
-        assert!(output.starts_with("unsat"));
+        assert_unsat(query);
     }
 }
