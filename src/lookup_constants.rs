@@ -44,7 +44,7 @@ pub struct LookupConstants {
     /// For these we define functions that return the value based on
     /// the row, and define the predicate as a wrapper that uses such
     /// function and constrains the given row and value.
-    functions: BTreeMap<Polynomial, SMTStatement>,
+    functions: Vec<SMTStatement>,
     /// Specializations for full lookups, i.e. those cannot be combined and only applied
     /// if the constants on the right hand side of a lookup exactly match the key in this map.
     /// The expression is the body of an SMT function of the form
@@ -128,35 +128,34 @@ impl LookupConstants {
     }
 
     pub fn function_definitions(&self) -> Vec<SMTStatement> {
-        self.functions
-            .iter()
-            .chain(self.constants.iter())
-            .map(|(_name, def)| def.clone())
-            .chain(
-                self.shortcuts
-                    .iter()
-                    .map(|(_name, (fun, body))| define_fun(fun.clone(), body.clone())),
-            )
-            .collect()
+        [
+            self.functions.clone(),
+            self.constants
+                .iter()
+                .map(|(_name, def)| def.clone())
+                .chain(
+                    self.shortcuts
+                        .iter()
+                        .map(|(_name, (fun, body))| define_fun(fun.clone(), body.clone())),
+                )
+                .collect(),
+        ]
+        .concat()
     }
 }
 
-fn add_constant_function(
-    result: &mut BTreeMap<Polynomial, SMTStatement>,
-    name: &str,
-    body: SMTExpr,
-) {
+fn add_constant_function(result: &mut Vec<SMTStatement>, name: &str, body: SMTExpr) {
     let poly = Polynomial::basic(&name.to_string());
     add_constant_function_poly(result, poly, body);
 }
 
-fn add_constant_function_poly(
-    result: &mut BTreeMap<Polynomial, SMTStatement>,
-    poly: Polynomial,
-    body: SMTExpr,
-) {
+fn add_aux_function(result: &mut Vec<SMTStatement>, fun: SMTFunction, body: SMTExpr) {
+    result.push(define_fun(fun, body));
+}
+
+fn add_constant_function_poly(result: &mut Vec<SMTStatement>, poly: Polynomial, body: SMTExpr) {
     let f_name = format!("{}_function", escape_identifier(&poly.to_string()));
-    result.insert(poly, define_fun(constant_lookup_function(f_name), body));
+    result.push(define_fun(constant_lookup_function(f_name), body));
 }
 
 fn add_constant(result: &mut BTreeMap<Polynomial, SMTStatement>, name: &str, body: SMTExpr) {
@@ -178,12 +177,48 @@ fn add_constant_poly(
     );
 }
 
-fn known_functions() -> BTreeMap<Polynomial, SMTStatement> {
-    let mut result = BTreeMap::new();
+fn known_functions() -> Vec<SMTStatement> {
+    let mut result = Vec::new();
 
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
+    let a = SMTVariable::new("a".to_string(), SMTSort::Int);
+    let b = SMTVariable::new("b".to_string(), SMTSort::Int);
 
-    add_constant_function(&mut result, "Binary.P_A", modulo(div(r, 256), 256));
+    // TODO fix
+    add_constant_function(&mut result, "Binary.P_CIN", 0.into());
+
+    add_constant_function(
+        &mut result,
+        "Binary.P_OPCODE",
+        div(r.clone(), 262144 /* 256 * 256 * 2 * 2*/),
+    );
+    add_constant_function(&mut result, "Binary.P_B", modulo(r.clone(), 256));
+    add_constant_function(&mut result, "Binary.P_A", modulo(div(r.clone(), 256), 256));
+    let add_fun = SMTFunction::new(
+        "AUX_ADD".to_string(),
+        SMTSort::Int,
+        vec![a.clone(), b.clone()],
+    );
+    add_aux_function(&mut result, add_fun.clone(), add(a.clone(), b.clone()));
+
+    let p_a_appl = constant_lookup_function_appl("Binary.P_A".to_string(), vec![r.clone().into()]);
+    let p_b_appl = constant_lookup_function_appl("Binary.P_B".to_string(), vec![r.clone().into()]);
+    let p_cin_appl =
+        constant_lookup_function_appl("Binary.P_CIN".to_string(), vec![r.clone().into()]);
+    let p_opcode_appl =
+        constant_lookup_function_appl("Binary.P_CIN".to_string(), vec![r.clone().into()]);
+    let p_c = ite(
+        eq(p_opcode_appl, 0),
+        modulo(
+            uf(
+                add_fun.clone(),
+                vec![p_cin_appl, uf(add_fun.clone(), vec![p_a_appl, p_b_appl])],
+            ),
+            256,
+        ),
+        0,
+    );
+    add_constant_function(&mut result, "Binary.P_C", p_c);
 
     result
 }
@@ -301,7 +336,10 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     add_constant(
         &mut result,
         "Binary.P_OPCODE",
-        eq(v.clone(), div(r.clone(), 262144 /* 256 * 256 * 2 * 2*/)),
+        eq(
+            v.clone(),
+            constant_lookup_function_appl("Binary.P_OPCODE".to_string(), vec![r.clone().into()]),
+        ),
     );
 
     add_constant(
@@ -319,8 +357,15 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         ),
     );
 
-    // TODO
-    add_constant(&mut result, "Binary.P_B", literal_true());
+    add_constant(
+        &mut result,
+        "Binary.P_B",
+        eq(
+            v.clone(),
+            constant_lookup_function_appl("Binary.P_B".to_string(), vec![r.clone().into()]),
+        ),
+    );
+
     // TODO
     add_constant(&mut result, "Binary.P_C", literal_true());
     // TODO
