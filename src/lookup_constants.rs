@@ -85,15 +85,19 @@ impl LookupConstants {
             exists(
                 vec![row.clone()],
                 and_vec(
-                    lhs.into_iter()
-                        .zip(rhs.iter())
-                        .map(|(expr, constant)| {
-                            uf(
-                                self.known_lookup_constant_as_function(constant).unwrap(),
-                                vec![row.clone().into(), expr],
-                            )
-                        })
-                        .collect(),
+                    [
+                        vec![ge(row.clone(), 0)],
+                        lhs.into_iter()
+                            .zip(rhs.iter())
+                            .map(|(expr, constant)| {
+                                uf(
+                                    self.known_lookup_constant_as_function(constant).unwrap(),
+                                    vec![row.clone().into(), expr],
+                                )
+                            })
+                            .collect(),
+                    ]
+                    .concat(),
                 ),
             )
         }
@@ -173,13 +177,10 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     add_constant(
         &mut result,
         "Arith.BYTE2_BIT19",
-        // definition is: v == r % (2**16 + 2**19)
-        // TODO This is not modeled below.
-        and_vec(vec![
-            eq(r.clone(), v.clone()),
-            ge(v.clone(), 0),
-            le(v.clone(), ((1 << 16) + (1 << 19)) - 1),
-        ]),
+        and_vec(vec![eq(
+            v.clone(),
+            modulo(r.clone(), (1 << 16) + (1 << 19)),
+        )]),
     );
     // All the GL_SIGNED constants are built in the same way, with parameters
     // from, to, steps:
@@ -188,10 +189,9 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     // included in the range)
     // formally:
     // (r, v) => v == start + floor(r / steps) % (end + 1 - start)
-    fn range_constant(start: i64, end: i64, step: i64) -> SMTExpr {
+    fn range_constant(start: i64, end: i64, step: u64) -> SMTExpr {
         let r = SMTVariable::new("r".to_string(), SMTSort::Int);
         let v = SMTVariable::new("v".to_string(), SMTSort::Int);
-        let k = SMTVariable::new("k".to_string(), SMTSort::Int);
         assert_eq!(
             constant_lookup_function(String::new()).args,
             vec![r.clone(), v.clone()]
@@ -201,18 +201,11 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         if step == 1 {
             // v == start + r % span
             // v >= start && v <= end && exists k: v == start + r + k * span
-            and_vec(vec![
-                ge(v.clone(), signed_to_smt(start)),
-                le(v.clone(), signed_to_smt(end)),
-                exists(
-                    vec![k.clone()],
-                    eq(v, add(signed_to_smt(start), add(r, mul(k, span)))),
-                ),
-            ])
+            eq(v, add(signed_to_smt(start), modulo(r, span)))
         } else {
             // v == start + floor(r / step) % span
             // v >= start && v <= end && exists k: v == start + floor(r / step) + k * span
-            unimplemented!()
+            eq(v, add(signed_to_smt(start), modulo(div(r, step), span)))
         }
     }
     add_constant(
@@ -223,12 +216,12 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     add_constant(
         &mut result,
         "Arith.GL_SIGNED_4BITS_C1",
-        range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33
+        range_constant(-16, 16, 33),
     );
     add_constant(
         &mut result,
         "Arith.GL_SIGNED_4BITS_C2",
-        range_constant(-16, 16, 1), // TODO WRONG! Tis should be: 33 * 33
+        range_constant(-16, 16, 33 * 33),
     );
     add_constant(
         &mut result,
