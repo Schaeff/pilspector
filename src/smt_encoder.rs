@@ -690,29 +690,33 @@ mod test {
         pol_to_smt_var_in_row_and_exec(&Polynomial::array_element(name, index).into(), row, 0)
     }
 
-    fn run_query(query: Vec<SMTStatement>) -> String {
-        let (output, error) = solver::query_smt_with_solver(
+    fn run_query(query: Vec<SMTStatement>) -> (bool, BTreeMap<String, String>) {
+        solver::query_smt_with_solver_return_model(
             &query
                 .iter()
                 .map(|s| s.as_smt())
                 .collect::<Vec<_>>()
                 .join("\n"),
             solver::SolverConfig::new("z3"),
-        );
-        assert_eq!(error, String::new());
-        output
+        )
     }
 
     fn assert_unsat(query: Vec<SMTStatement>) {
-        let output = run_query(query);
-        assert!(
-            output.starts_with("unsat"),
-            "Expected 'unsat' but got {output}"
-        );
+        let (sat, model) = run_query(query);
+        if sat {
+            println!("Expected 'unsat' but got 'sat'. Model (omitting zero valued variables):");
+            for (var, value) in model {
+                if value != "0" {
+                    println!("{var} = {value}");
+                }
+            }
+            assert!(!sat);
+        }
     }
 
     fn assert_sat(query: Vec<SMTStatement>) {
-        assert!(run_query(query).starts_with("sat"));
+        let (sat, model) = run_query(query);
+        assert!(sat);
     }
 
     /// Verify that Arith.x1[0] is constant over a window of size 32

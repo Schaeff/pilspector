@@ -10,6 +10,7 @@ pub mod smt_encoder;
 pub mod solver;
 mod validator;
 mod visitor;
+mod sexpr;
 
 /// compile a string with pilcom
 pub fn pilcom_from_str(source: &str) -> Result<String, String> {
