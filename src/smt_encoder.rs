@@ -169,7 +169,10 @@ impl SmtEncoder {
         }
     }
 
-    fn encode_state_machine(&mut self, p: &Pil) {
+    /// Encodes a single step / row of the state machine and returns the
+    /// function and a vector containing the parameter polynomials except for the
+    /// first one which is "row".
+    fn encode_state_machine_step(&mut self, p: &Pil) -> (SMTFunction, Vec<ShiftedPolynomial>) {
         // Collect only constants that appear in constraints or
         // LHS of plookups.
         // Constants that appear only in the RHS of a lookup
@@ -272,18 +275,27 @@ impl SmtEncoder {
 
         self.out(define_fun(state_machine_decl.clone(), body));
 
+        (
+            state_machine_decl,
+            const_collector
+                .consts
+                .iter()
+                .chain(collector.vars.iter())
+                .cloned()
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    fn encode_state_machine(&mut self, p: &Pil) {
+        // Encode the machine for a single step / row
+        let (state_machine_decl, all_vars) = self.encode_state_machine_step(p);
+
         // Create the main query.
 
         let mut decls: BTreeSet<SMTVariable> = BTreeSet::default();
         let mut appls: Vec<SMTExpr> = vec![];
         let mut rows_constrs: Vec<SMTExpr> = vec![];
         let mut next_constrs: Vec<SMTExpr> = vec![];
-
-        let all_vars = const_collector
-            .consts
-            .iter()
-            .chain(collector.vars.iter())
-            .collect::<Vec<_>>();
 
         // Unroll the state machine `rows` times
         // state_machine(row_i, input_row_i, out_row_i, out_next_row_i)
