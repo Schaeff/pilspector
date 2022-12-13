@@ -206,19 +206,32 @@ fn known_functions() -> Vec<SMTStatement> {
     let p_cin_appl =
         constant_lookup_function_appl("Binary.P_CIN".to_string(), vec![r.clone().into()]);
     let p_opcode_appl =
-        constant_lookup_function_appl("Binary.P_CIN".to_string(), vec![r.clone().into()]);
+        constant_lookup_function_appl("Binary.P_OPCODE".to_string(), vec![r.clone().into()]);
+    let p_a = literal("a".to_string(), SMTSort::Int);
+    let p_b = literal("b".to_string(), SMTSort::Int);
+    let p_cin = literal("cin".to_string(), SMTSort::Int);
+    let p_op = literal("op".to_string(), SMTSort::Int);
     let p_c = ite(
-        eq(p_opcode_appl, 0),
+        eq(p_op, 0),
         modulo(
             uf(
                 add_fun.clone(),
-                vec![p_cin_appl, uf(add_fun.clone(), vec![p_a_appl, p_b_appl])],
+                vec![p_cin, uf(add_fun.clone(), vec![p_a, p_b])],
             ),
             256,
         ),
         0,
     );
-    add_constant_function(&mut result, "Binary.P_C", p_c);
+    let let_p_c = let_smt(
+        vec![
+            ("a".to_string(), p_a_appl),
+            ("b".to_string(), p_b_appl),
+            ("cin".to_string(), p_cin_appl),
+            ("op".to_string(), p_opcode_appl),
+        ],
+        p_c,
+    );
+    add_constant_function(&mut result, "Binary.P_C", let_p_c);
 
     result
 }

@@ -94,6 +94,7 @@ pub enum SMTOp {
     Le,
     Gt,
     Ge,
+    Let(Vec<(String, SMTExpr)>),
     Exists(Vec<SMTVariable>),
     Literal(String, SMTSort),
     Variable(SMTVariable),
@@ -182,6 +183,13 @@ pub fn implies(premise: impl Into<SMTExpr>, conclusion: impl Into<SMTExpr>) -> S
     SMTExpr {
         op: SMTOp::Implies,
         args: vec![premise.into(), conclusion.into()],
+    }
+}
+
+pub fn let_smt(aliases: Vec<(String, SMTExpr)>, inner: SMTExpr) -> SMTExpr {
+    SMTExpr {
+        op: SMTOp::Let(aliases),
+        args: vec![inner],
     }
 }
 
@@ -419,6 +427,17 @@ impl SMTFormat for SMTExpr {
             SMTOp::Ge => {
                 assert!(self.args.len() == 2);
                 format!("(>= {} {})", self.args[0].as_smt(), self.args[1].as_smt())
+            }
+            SMTOp::Let(aliases) => {
+                format!(
+                    "(let ({}) {})",
+                    aliases
+                        .iter()
+                        .map(|(alias, expr)| format!("({} {})", alias, expr.as_smt()))
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                    self.args[0].as_smt()
+                )
             }
             SMTOp::Exists(vars) => {
                 assert!(self.args.len() == 1);
