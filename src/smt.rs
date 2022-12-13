@@ -245,14 +245,12 @@ pub fn modulo<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
-/*
 pub fn lt<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Lt,
         args: vec![lhs.into(), rhs.into()],
     }
 }
-*/
 
 pub fn le<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
@@ -317,11 +315,11 @@ pub fn declare_const(var: SMTVariable) -> SMTStatement {
     SMTStatement::DeclareConst(var)
 }
 
-/*
 pub fn declare_fun(var: SMTVariable, sorts: Vec<SMTSort>) -> SMTStatement {
     SMTStatement::DeclareFun(var, sorts)
 }
 
+/*
 pub fn define_const(var: SMTVariable, val: SMTExpr) -> SMTStatement {
     SMTStatement::DefineConst(var, val)
 }
