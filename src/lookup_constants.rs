@@ -4,13 +4,25 @@ use crate::ast::*;
 use crate::smt::*;
 use crate::smt_encoder::escape_identifier;
 
-fn constant_lookup_function(name: String) -> SMTFunction {
+fn constant_lookup_predicate(name: String) -> SMTFunction {
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
     let v = SMTVariable::new("v".to_string(), SMTSort::Int);
     SMTFunction::new(name, SMTSort::Bool, vec![r, v])
 }
 
-fn constant_function_name(poly: Polynomial) -> String {
+fn constant_lookup_function(name: String) -> SMTFunction {
+    let r = SMTVariable::new("r".to_string(), SMTSort::Int);
+    SMTFunction::new(name, SMTSort::Int, vec![r])
+}
+
+fn constant_lookup_function_appl(name: String, args: Vec<SMTExpr>) -> SMTExpr {
+    uf(
+        constant_lookup_function(format!("{}_function", escape_identifier(name.as_str()))),
+        args,
+    )
+}
+
+fn constant_function_predicate(poly: Polynomial) -> String {
     format!("const_{}", escape_identifier(&poly.to_string()))
 }
 
@@ -25,6 +37,14 @@ pub struct LookupConstants {
     /// The lookup (e1, e2, ..., en) in (l1, l2, ..., ln) is translated to
     /// (exists ((row Int)) (and (l1 row e1) (l2 row e2) ... (ln row e2)))
     constants: BTreeMap<Polynomial, SMTStatement>,
+    /// Some constants are more easily represented by functions,
+    /// especially when they are reused by other constants.
+    /// For example, Binary.P_A and Binary.P_B are used in the RHS
+    /// of lookups, but they are also used in Binary.P_C.
+    /// For these we define functions that return the value based on
+    /// the row, and define the predicate as a wrapper that uses such
+    /// function and constrains the given row and value.
+    functions: BTreeMap<Polynomial, SMTStatement>,
     /// Specializations for full lookups, i.e. those cannot be combined and only applied
     /// if the constants on the right hand side of a lookup exactly match the key in this map.
     /// The expression is the body of an SMT function of the form
@@ -43,6 +63,7 @@ impl LookupConstants {
     pub fn new() -> LookupConstants {
         LookupConstants {
             constants: known_constants(),
+            functions: known_functions(),
             shortcuts: known_shortcut_lookups(),
         }
     }
@@ -59,13 +80,13 @@ impl LookupConstants {
             .map(|(p, _)| p.clone())
     }
 
-    pub fn known_lookup_constant_as_function(
+    pub fn known_lookup_constant_as_predicate(
         &self,
         lookup: &ShiftedPolynomial,
     ) -> Option<SMTFunction> {
         self.known_lookup_constant(lookup)
-            .map(constant_function_name)
-            .map(constant_lookup_function)
+            .map(constant_function_predicate)
+            .map(constant_lookup_predicate)
     }
 
     pub fn encode_lookup(&self, lhs: Vec<SMTExpr>, rhs: Vec<ShiftedPolynomial>) -> SMTExpr {
@@ -91,7 +112,7 @@ impl LookupConstants {
                             .zip(rhs.iter())
                             .map(|(expr, constant)| {
                                 uf(
-                                    self.known_lookup_constant_as_function(constant).unwrap(),
+                                    self.known_lookup_constant_as_predicate(constant).unwrap(),
                                     vec![row.clone().into(), expr],
                                 )
                             })
@@ -104,8 +125,9 @@ impl LookupConstants {
     }
 
     pub fn function_definitions(&self) -> Vec<SMTStatement> {
-        self.constants
+        self.functions
             .iter()
+            .chain(self.constants.iter())
             .map(|(_name, def)| def.clone())
             .chain(
                 self.shortcuts
@@ -114,6 +136,24 @@ impl LookupConstants {
             )
             .collect()
     }
+}
+
+fn add_constant_function(
+    result: &mut BTreeMap<Polynomial, SMTStatement>,
+    name: &str,
+    body: SMTExpr,
+) {
+    let poly = Polynomial::basic(&name.to_string());
+    add_constant_function_poly(result, poly, body);
+}
+
+fn add_constant_function_poly(
+    result: &mut BTreeMap<Polynomial, SMTStatement>,
+    poly: Polynomial,
+    body: SMTExpr,
+) {
+    let f_name = format!("{}_function", escape_identifier(&poly.to_string()));
+    result.insert(poly, define_fun(constant_lookup_function(f_name), body));
 }
 
 fn add_constant(result: &mut BTreeMap<Polynomial, SMTStatement>, name: &str, body: SMTExpr) {
@@ -128,8 +168,21 @@ fn add_constant_poly(
 ) {
     result.insert(
         poly.clone(),
-        define_fun(constant_lookup_function(constant_function_name(poly)), body),
+        define_fun(
+            constant_lookup_predicate(constant_function_predicate(poly)),
+            body,
+        ),
     );
+}
+
+fn known_functions() -> BTreeMap<Polynomial, SMTStatement> {
+    let mut result = BTreeMap::new();
+
+    let r = SMTVariable::new("r".to_string(), SMTSort::Int);
+
+    add_constant_function(&mut result, "Binary.P_A", modulo(div(r, 256), 256));
+
+    result
 }
 
 fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
@@ -137,7 +190,7 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
     let v = SMTVariable::new("v".to_string(), SMTSort::Int);
     assert_eq!(
-        constant_lookup_function(String::new()).args,
+        constant_lookup_predicate(String::new()).args,
         vec![r.clone(), v.clone()]
     );
     add_constant(
@@ -193,7 +246,7 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         let r = SMTVariable::new("r".to_string(), SMTSort::Int);
         let v = SMTVariable::new("v".to_string(), SMTSort::Int);
         assert_eq!(
-            constant_lookup_function(String::new()).args,
+            constant_lookup_predicate(String::new()).args,
             vec![r.clone(), v.clone()]
         );
         assert!(end >= start);
@@ -253,7 +306,10 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     add_constant(
         &mut result,
         "Binary.P_A",
-        eq(v.clone(), modulo(div(r.clone(), 256), 256)),
+        eq(
+            v.clone(),
+            constant_lookup_function_appl("Binary.P_A".to_string(), vec![r.clone().into()]),
+        ),
     );
 
     // TODO
