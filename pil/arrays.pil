@@ -2,3 +2,6 @@ namespace Array(%N);
     pol commit x[2];
     pol constant y[2];
     x[0] * y[1] = x[1] * y[0];
+    pol commit xx[2];
+    pol constant yy[2];
+    xx[0] * yy[1] = xx[1] * yy[0];
