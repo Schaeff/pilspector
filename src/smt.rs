@@ -384,7 +384,7 @@ impl SMTFormat for SMTExpr {
             }
             SMTOp::Div => {
                 assert!(self.args.len() == 2);
-                format!("(/ {} {})", self.args[0].as_smt(), self.args[1].as_smt())
+                format!("(div {} {})", self.args[0].as_smt(), self.args[1].as_smt())
             }
             SMTOp::Mod => {
                 assert!(self.args.len() == 2);
