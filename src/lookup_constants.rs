@@ -153,10 +153,7 @@ fn add_constant_function_poly(
     body: SMTExpr,
 ) {
     let f_name = format!("{}_function", escape_identifier(&poly.to_string()));
-    result.insert(
-        poly,
-        define_fun(constant_lookup_function(f_name), body),
-    );
+    result.insert(poly, define_fun(constant_lookup_function(f_name), body));
 }
 
 fn add_constant(result: &mut BTreeMap<Polynomial, SMTStatement>, name: &str, body: SMTExpr) {
@@ -171,7 +168,10 @@ fn add_constant_poly(
 ) {
     result.insert(
         poly.clone(),
-        define_fun(constant_lookup_predicate(constant_function_name(poly)), body),
+        define_fun(
+            constant_lookup_predicate(constant_function_name(poly)),
+            body,
+        ),
     );
 }
 
@@ -308,10 +308,7 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         "Binary.P_A",
         eq(
             v.clone(),
-            constant_lookup_function_appl(
-                "Binary.P_A".to_string(),
-                vec![r.clone().into()],
-            ),
+            constant_lookup_function_appl("Binary.P_A".to_string(), vec![r.clone().into()]),
         ),
     );
 
