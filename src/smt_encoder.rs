@@ -237,13 +237,18 @@ impl SmtEncoder {
                     .consts
                     .iter()
                     .filter_map(|c| {
+                        let (pol, next) = c.clone().decompose();
                         self.lookup_constants
-                            .known_lookup_constant_as_function(c)
+                            .known_lookup_constant_as_function(&pol.into())
                             .map(|f| {
                                 uf(
                                     f,
                                     vec![
-                                        smt_row_arg.clone().into(),
+                                        if next {
+                                            add(SMTExpr::from(smt_row_arg.clone()), 1)
+                                        } else {
+                                            smt_row_arg.clone().into()
+                                        },
                                         self.pol_to_smt_var(c, None).into(),
                                     ],
                                 )
@@ -258,7 +263,11 @@ impl SmtEncoder {
         const_collector
             .consts
             .iter()
-            .filter(|c| !self.lookup_constants.is_known_constant(c))
+            .filter(|&c| {
+                !self
+                    .lookup_constants
+                    .is_known_constant(&c.clone().decompose().0.into())
+            })
             .for_each(|c| println!("Constant {} used in constraints has no lookup function.", c));
 
         self.out(define_fun(state_machine_decl.clone(), body));
