@@ -41,6 +41,7 @@ impl SmtPil {
 enum Constraint {
     Identity(PolIdentity),
     Lookup(PlookupIdentity),
+    ImPDefinition(String, ExpressionId),
 }
 
 pub struct SmtEncoder {
@@ -263,6 +264,9 @@ impl SmtEncoder {
                     for e in f {
                         const_collector.visit_expression_id(e, p).unwrap();
                     }
+                }
+                Constraint::ImPDefinition(name, value) => {
+                    const_collector.visit_expression_id(value, p).unwrap();
                 }
                 _ => panic!(),
             }
@@ -492,6 +496,13 @@ impl Visitor for SmtEncoder {
             self.visit_polynomial_identity(identity, ctx, index)?;
         }
 
+        for (key, r) in &p.references {
+            if let Polynomials::ImP(r) = r {
+                assert_eq!(r.len, None);
+                self.encode_intermediate_polynomial(key, r.id, ctx);
+            }
+        }
+
         Ok(())
     }
 
@@ -651,6 +662,37 @@ impl SmtEncoder {
     fn encode_const(&self, c: &Const, ctx: &Pil) -> SMTExpr {
         let pol = c.to_polynomial(ctx);
         pol_to_smt_var(&pol, None).into()
+    }
+
+    fn encode_intermediate_polynomial(&mut self, name: &String, value: ExpressionId, ctx: &Pil) {
+        let poly = Polynomial::basic(name);
+        let value_expr = &ctx.expressions[value.0];
+        let expr = eq(
+            pol_to_smt_var(&poly.clone().into(), None),
+            self.encode_expression(value_expr, ctx),
+        );
+        let mut collector = VariableCollector::new();
+        collector.visit_expression(value_expr, ctx).unwrap();
+
+        let mut smt_vars: Vec<_> = collector
+            .consts
+            .iter()
+            .chain(collector.vars.iter())
+            .map(|pol| pol_to_smt_var(pol, None))
+            .collect();
+        smt_vars.push(pol_to_smt_var(&poly.into(), None));
+        let fun = SMTFunction::new(
+            format!("imp_def_{}", escape_identifier(name)),
+            SMTSort::Bool,
+            smt_vars,
+        );
+        self.funs.push(fun.clone());
+        self.fun_constraints.insert(
+            fun.name.clone(),
+            Constraint::ImPDefinition(name.clone(), value),
+        );
+        let fun_def = define_fun(fun, expr);
+        self.out(fun_def);
     }
 }
 
