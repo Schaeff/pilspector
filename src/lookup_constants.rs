@@ -22,7 +22,7 @@ fn constant_lookup_function_appl(name: String, args: Vec<SMTExpr>) -> SMTExpr {
     )
 }
 
-fn constant_function_name(poly: Polynomial) -> String {
+fn constant_function_predicate(poly: Polynomial) -> String {
     format!("const_{}", escape_identifier(&poly.to_string()))
 }
 
@@ -85,7 +85,7 @@ impl LookupConstants {
         lookup: &ShiftedPolynomial,
     ) -> Option<SMTFunction> {
         self.known_lookup_constant(lookup)
-            .map(constant_function_name)
+            .map(constant_function_predicate)
             .map(constant_lookup_predicate)
     }
 
@@ -169,7 +169,7 @@ fn add_constant_poly(
     result.insert(
         poly.clone(),
         define_fun(
-            constant_lookup_predicate(constant_function_name(poly)),
+            constant_lookup_predicate(constant_function_predicate(poly)),
             body,
         ),
     );
