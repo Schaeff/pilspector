@@ -53,6 +53,10 @@ impl LookupConstants {
     }
 
     fn known_lookup_constant(&self, lookup: &ShiftedPolynomial) -> Option<Polynomial> {
+        if lookup.next {
+            return None;
+        }
+
         self.constants
             .get_key_value(&lookup.pol)
             .map(|(p, _)| p.clone())
