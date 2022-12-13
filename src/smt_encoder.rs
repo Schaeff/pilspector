@@ -140,29 +140,29 @@ pub fn escape_identifier(input: &str) -> String {
 }
 
 // Some helpers.
+fn pol_to_smt_var(pol: &ShiftedPolynomial, suffix: Option<String>) -> SMTVariable {
+    let mut key = escape_identifier(&pol.to_string());
+    if suffix.is_some() {
+        key = format!("{}_{}", key, suffix.unwrap());
+    }
+    SMTVariable::new(key, SMTSort::Int)
+}
+
+fn constr_to_smt_function(i: &PolIdentity, constr_idx: usize, ctx: &Pil) -> SMTFunction {
+    let mut collector = VariableCollector::new();
+    let constr = &ctx.expressions[i.e.0];
+    collector.visit_expression(constr, ctx).unwrap();
+
+    let smt_vars: Vec<_> = collector
+        .consts
+        .iter()
+        .chain(collector.vars.iter())
+        .map(|pol| pol_to_smt_var(pol, None))
+        .collect();
+    SMTFunction::new(format!("constr_{}", constr_idx), SMTSort::Bool, smt_vars)
+}
+
 impl SmtEncoder {
-    fn pol_to_smt_var(&self, pol: &ShiftedPolynomial, suffix: Option<String>) -> SMTVariable {
-        let mut key = escape_identifier(&pol.to_string());
-        if suffix.is_some() {
-            key = format!("{}_{}", key, suffix.unwrap());
-        }
-        SMTVariable::new(key, SMTSort::Int)
-    }
-
-    fn constr_to_smt_function(&self, i: &PolIdentity, constr_idx: usize, ctx: &Pil) -> SMTFunction {
-        let mut collector = VariableCollector::new();
-        let constr = &ctx.expressions[i.e.0];
-        collector.visit_expression(constr, ctx).unwrap();
-
-        let smt_vars: Vec<_> = collector
-            .consts
-            .iter()
-            .chain(collector.vars.iter())
-            .map(|pol| self.pol_to_smt_var(pol, None))
-            .collect();
-        SMTFunction::new(format!("constr_{}", constr_idx), SMTSort::Bool, smt_vars)
-    }
-
     fn define_constants(&mut self) {
         for c in self.lookup_constants.function_definitions() {
             self.out(c);
@@ -208,7 +208,7 @@ impl SmtEncoder {
             const_collector
                 .consts
                 .iter()
-                .map(|pol| self.pol_to_smt_var(pol, None))
+                .map(|pol| pol_to_smt_var(pol, None))
                 .collect::<Vec<_>>(),
         );
 
@@ -221,7 +221,7 @@ impl SmtEncoder {
             collector
                 .vars
                 .iter()
-                .map(|pol| self.pol_to_smt_var(pol, None))
+                .map(|pol| pol_to_smt_var(pol, None))
                 .collect::<Vec<_>>(),
         );
 
@@ -252,7 +252,7 @@ impl SmtEncoder {
                                         } else {
                                             smt_row_arg.clone().into()
                                         },
-                                        self.pol_to_smt_var(c, None).into(),
+                                        pol_to_smt_var(c, None).into(),
                                     ],
                                 )
                             })
@@ -287,12 +287,12 @@ impl SmtEncoder {
     }
 
     fn encode_state_machine_unrolled(
-        &mut self,
         state_machine_decl: SMTFunction,
+        in_vars: &BTreeSet<String>,
         all_vars: Vec<ShiftedPolynomial>,
         rows: usize,
         executions: usize,
-    ) {
+    ) -> Vec<SMTStatement> {
         let mut decls: BTreeSet<SMTVariable> = BTreeSet::default();
         let mut appls: Vec<SMTExpr> = vec![];
         let mut rows_constrs: Vec<SMTExpr> = vec![];
@@ -325,14 +325,13 @@ impl SmtEncoder {
 
                 all_vars.iter().for_each(|pol| {
                     // Create and declare the variable for this row and execution.
-                    let smt_var =
-                        self.pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec)));
+                    let smt_var = pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec)));
                     inner_decls.push(smt_var.clone());
 
                     // Bind `var` and `next_var` in two sequential rows in the same execution.
                     if row > 0 {
                         if let Some(ref pol_next) = pol.next() {
-                            let prev_smt_var = self.pol_to_smt_var(
+                            let prev_smt_var = pol_to_smt_var(
                                 pol_next,
                                 Some(format!("_row{}_exec{}", row - 1, exec)),
                             );
@@ -342,14 +341,9 @@ impl SmtEncoder {
                     }
 
                     // Bind two input variables of same row and different execution.
-                    if exec > 0
-                        && self
-                            .in_vars
-                            .get(&self.pol_to_smt_var(pol, None).name)
-                            .is_some()
-                    {
+                    if exec > 0 && in_vars.get(&pol_to_smt_var(pol, None).name).is_some() {
                         let other_exec_smt_var =
-                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec - 1)));
+                            pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec - 1)));
                         assert!(decls.get(&other_exec_smt_var).is_some());
                         next_constrs.push(eq(smt_var, other_exec_smt_var));
                     }
@@ -374,7 +368,7 @@ impl SmtEncoder {
         statements.push(assert(and_vec(
             vec![rows_constrs, next_constrs, appls].concat(),
         )));
-        self.out_vec(statements);
+        statements
     }
 
     fn encode_state_machine_determinism(&mut self, p: &Pil) {
@@ -382,22 +376,24 @@ impl SmtEncoder {
         let (state_machine_decl, all_vars) = self.encode_state_machine_step(p);
 
         // Unroll it for "rows" rows and two executions.
-        self.encode_state_machine_unrolled(state_machine_decl, all_vars.clone(), self.rows, 2);
+        self.out_vec(Self::encode_state_machine_unrolled(
+            state_machine_decl,
+            &self.in_vars,
+            all_vars.clone(),
+            self.rows,
+            2,
+        ));
 
         if !self.out_vars.is_empty() {
             // Create nondeterminism query
             let query = not(and_vec(
                 all_vars
                     .iter()
-                    .filter(|pol| {
-                        self.out_vars
-                            .get(&self.pol_to_smt_var(pol, None).name)
-                            .is_some()
-                    })
+                    .filter(|pol| self.out_vars.get(&pol_to_smt_var(pol, None).name).is_some())
                     .map(|pol| {
                         eq(
-                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec0", self.rows - 1))),
-                            self.pol_to_smt_var(pol, Some(format!("_row{}_exec1", self.rows - 1))),
+                            pol_to_smt_var(pol, Some(format!("_row{}_exec0", self.rows - 1))),
+                            pol_to_smt_var(pol, Some(format!("_row{}_exec1", self.rows - 1))),
                         )
                     })
                     .collect::<Vec<_>>(),
@@ -447,7 +443,7 @@ impl Visitor for SmtEncoder {
     ) -> Result<Self::Error> {
         let constr = &ctx.expressions[i.e.0];
         let expr = eq_zero(self.encode_expression(constr, ctx));
-        let fun = self.constr_to_smt_function(i, idx, ctx);
+        let fun = constr_to_smt_function(i, idx, ctx);
         self.funs.push(fun.clone());
         self.fun_constraints
             .insert(fun.name.clone(), Constraint::Identity(i.clone()));
@@ -514,7 +510,7 @@ impl Visitor for SmtEncoder {
             .vars
             .iter()
             .chain(collector.consts.iter())
-            .map(|pol| self.pol_to_smt_var(pol, None))
+            .map(|pol| pol_to_smt_var(pol, None))
             .collect();
         let lookup_function =
             SMTFunction::new(format!("lookup_{}", idx), SMTSort::Bool, parameters);
@@ -576,12 +572,12 @@ impl SmtEncoder {
 
     fn encode_cm(&self, expr: &Cm, ctx: &Pil) -> SMTExpr {
         let pol = expr.to_polynomial(ctx);
-        self.pol_to_smt_var(&pol, None).into()
+        pol_to_smt_var(&pol, None).into()
     }
 
     fn encode_exp(&self, expr: &Exp, ctx: &Pil) -> SMTExpr {
         let pol = expr.to_polynomial(ctx);
-        self.pol_to_smt_var(&pol, None).into()
+        pol_to_smt_var(&pol, None).into()
     }
 
     fn encode_number(&self, n: &Number) -> SMTExpr {
@@ -590,7 +586,7 @@ impl SmtEncoder {
 
     fn encode_const(&self, c: &Const, ctx: &Pil) -> SMTExpr {
         let pol = c.to_polynomial(ctx);
-        self.pol_to_smt_var(&pol, None).into()
+        pol_to_smt_var(&pol, None).into()
     }
 }
 
