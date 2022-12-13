@@ -112,6 +112,6 @@ mod test {
     fn display_arrays() {
         let pil_str = pilcom("pil/arrays.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
-        assert_eq!(&pil.to_string(), "pol commit Array.x[2];\npol constant Array.y[2];\n((Array.x[0] * Array.y[1]) - (Array.x[1] * Array.y[0])) == 0\n");
+        assert_eq!(&pil.to_string(), "pol commit Array.x[2];\npol commit Array.xx[2];\npol constant Array.y[2];\npol constant Array.yy[2];\n((Array.x[0] * Array.y[1]) - (Array.x[1] * Array.y[0])) == 0\n((Array.xx[0] * Array.yy[1]) - (Array.xx[1] * Array.yy[0])) == 0\n");
     }
 }
