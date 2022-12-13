@@ -45,7 +45,7 @@ impl ToPolynomial for Cm {
             .iter()
             .filter_map(|(key, r)| match r {
                 Polynomials::CmP(r) => (self.id.0 >= r.id.0
-                    && self.id.0 <= r.id.0 + r.len.unwrap_or(0))
+                    && self.id.0 < r.id.0 + r.len.unwrap_or(1))
                 .then_some((key, r)),
                 _ => None,
             })
@@ -67,7 +67,7 @@ impl ToPolynomial for Const {
             .iter()
             .filter_map(|(key, r)| match r {
                 Polynomials::ConstP(r) => (self.id.0 >= r.id.0
-                    && self.id.0 <= r.id.0 + r.len.unwrap_or(0))
+                    && self.id.0 < r.id.0 + r.len.unwrap_or(1))
                 .then_some((key, r)),
                 _ => None,
             })
@@ -89,7 +89,7 @@ impl ToPolynomial for Exp {
             .iter()
             .filter_map(|(key, r)| match r {
                 Polynomials::ImP(r) => (self.id.0 >= r.id.0
-                    && self.id.0 <= r.id.0 + r.len.unwrap_or(0))
+                    && self.id.0 < r.id.0 + r.len.unwrap_or(1))
                 .then_some((key, r)),
                 _ => None,
             })
@@ -245,9 +245,9 @@ impl Polynomial {
         }
     }
 
-    pub fn array_element(key: &Name, index: usize) -> Self {
+    pub fn array_element(key: &str, index: usize) -> Self {
         Self {
-            key: key.clone(),
+            key: key.into(),
             index: Some(index),
         }
     }

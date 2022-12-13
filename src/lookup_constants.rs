@@ -217,7 +217,7 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     for i in 0..32 {
         add_constant_poly(
             &mut result,
-            Polynomial::array_element(&"Arith.CLK".to_string(), i),
+            Polynomial::array_element("Arith.CLK", i),
             eq(v.clone(), ite(eq(modulo(r.clone(), 32), i as u64), 1, 0)),
         );
     }
