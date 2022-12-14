@@ -48,6 +48,7 @@ pub struct SmtEncoder {
     pub smt: Vec<SMTStatement>,
     funs: Vec<SMTFunction>,
     fun_constraints: BTreeMap<String, Constraint>,
+    intermediate_definitions: BTreeMap<Polynomial, SMTFunction>,
     lookup_constants: LookupConstants,
     in_vars: BTreeSet<String>,
     out_vars: BTreeSet<String>,
@@ -66,6 +67,7 @@ impl SmtEncoder {
             smt: Vec::default(),
             funs: Vec::default(),
             fun_constraints: BTreeMap::default(),
+            intermediate_definitions: BTreeMap::default(),
             lookup_constants,
             in_vars,
             out_vars,
@@ -88,6 +90,7 @@ impl SmtEncoder {
             smt: Vec::default(),
             funs: Vec::default(),
             fun_constraints: BTreeMap::default(),
+            intermediate_definitions: BTreeMap::default(),
             lookup_constants,
             in_vars: BTreeSet::default(),
             out_vars: BTreeSet::default(),
@@ -248,6 +251,7 @@ impl SmtEncoder {
         // Constants that appear only in the RHS of a lookup
         // do not need to be a parameter in the state machine.
         let mut const_collector = VariableCollector::new();
+
         self.fun_constraints.values().for_each(|constr| {
             match constr {
                 Constraint::Identity(i) => {
@@ -265,7 +269,7 @@ impl SmtEncoder {
                         const_collector.visit_expression_id(e, p).unwrap();
                     }
                 }
-                Constraint::ImPDefinition(name, value) => {
+                Constraint::ImPDefinition(_name, value) => {
                     const_collector.visit_expression_id(value, p).unwrap();
                 }
                 _ => panic!(),
@@ -298,42 +302,48 @@ impl SmtEncoder {
                 .collect::<Vec<_>>(),
         );
 
+        let imp_names = self
+            .intermediate_definitions
+            .iter()
+            .map(|(poly, _)| pol_to_smt_var(&poly.clone().into(), None))
+            .collect::<Vec<_>>();
+        // Remove intermediate polynomials from the state machine parameters.
+        smt_vars.retain(|var| !imp_names.contains(var));
+
         // Declare the state machine's function.
         let state_machine_decl =
             SMTFunction::new("state_machine".to_string(), SMTSort::Bool, smt_vars);
         // Add the UF application of every constraint to the body of the state machine.
         // This includes constraints, lookups and constants.
-        let body = and_vec(
-            [
-                self.funs
-                    .iter()
-                    .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
-                    .collect::<Vec<_>>(),
-                const_collector
-                    .consts
-                    .iter()
-                    .filter_map(|c| {
-                        let (pol, next) = c.clone().decompose();
-                        self.lookup_constants
-                            .known_lookup_constant_as_predicate(&pol.into())
-                            .map(|f| {
-                                uf(
-                                    f,
-                                    vec![
-                                        if next {
-                                            add(SMTExpr::from(smt_row_arg.clone()), 1)
-                                        } else {
-                                            smt_row_arg.clone().into()
-                                        },
-                                        pol_to_smt_var(c, None).into(),
-                                    ],
-                                )
-                            })
-                    })
-                    .collect::<Vec<_>>(),
-            ]
-            .concat(),
-        );
+        let constraints = [
+            self.funs
+                .iter()
+                .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
+                .collect::<Vec<_>>(),
+            const_collector
+                .consts
+                .iter()
+                .filter_map(|c| {
+                    let (pol, next) = c.clone().decompose();
+                    self.lookup_constants
+                        .known_lookup_constant_as_predicate(&pol.into())
+                        .map(|f| {
+                            uf(
+                                f,
+                                vec![
+                                    if next {
+                                        add(SMTExpr::from(smt_row_arg.clone()), 1)
+                                    } else {
+                                        smt_row_arg.clone().into()
+                                    },
+                                    pol_to_smt_var(c, None).into(),
+                                ],
+                            )
+                        })
+                })
+                .collect::<Vec<_>>(),
+        ]
+        .concat();
 
         // Warn about constants that are not constrained by a lookup.
         const_collector
@@ -346,17 +356,48 @@ impl SmtEncoder {
             })
             .for_each(|c| println!("Constant {} used in constraints has no lookup function.", c));
 
+        // Existentially quantify all intermediate polynomials and require their values
+        // to match their definition (we cannot really use "let" because their might be
+        // circular dependencies).
+        let body = exists(
+            imp_names,
+            and_vec(
+                [
+                    self.intermediate_definitions
+                        .iter()
+                        .map(|(poly, f)| {
+                            eq(
+                                pol_to_smt_var(&poly.clone().into(), None),
+                                match f.args.len() {
+                                    0 => SMTVariable {
+                                        name: f.name.clone(),
+                                        sort: f.sort.clone(),
+                                    }
+                                    .into(),
+                                    _ => uf(
+                                        f.clone(),
+                                        f.args.iter().map(|v| v.clone().into()).collect(),
+                                    ),
+                                },
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                    constraints,
+                ]
+                .concat(),
+            ),
+        );
+
         self.out(define_fun(state_machine_decl.clone(), body));
 
-        (
-            state_machine_decl,
-            const_collector
-                .consts
-                .iter()
-                .chain(collector.vars.iter())
-                .cloned()
-                .collect::<Vec<_>>(),
-        )
+        let parameter_polys = const_collector
+            .consts
+            .iter()
+            .chain(collector.vars.iter())
+            .cloned()
+            .filter(|p| !self.intermediate_definitions.contains_key(p.polynomial()))
+            .collect::<Vec<_>>();
+        (state_machine_decl, parameter_polys)
     }
 
     fn encode_state_machine_unrolled(
@@ -667,30 +708,26 @@ impl SmtEncoder {
     fn encode_intermediate_polynomial(&mut self, name: &String, value: ExpressionId, ctx: &Pil) {
         let poly = Polynomial::basic(name);
         let value_expr = &ctx.expressions[value.0];
-        let expr = eq(
-            pol_to_smt_var(&poly.clone().into(), None),
-            self.encode_expression(value_expr, ctx),
-        );
+        let expr = self.encode_expression(value_expr, ctx);
         let mut collector = VariableCollector::new();
         collector.visit_expression(value_expr, ctx).unwrap();
 
-        let mut smt_vars: Vec<_> = collector
+        let smt_vars: Vec<_> = collector
             .consts
             .iter()
             .chain(collector.vars.iter())
             .map(|pol| pol_to_smt_var(pol, None))
             .collect();
-        smt_vars.push(pol_to_smt_var(&poly.into(), None));
         let fun = SMTFunction::new(
             format!("imp_def_{}", escape_identifier(name)),
-            SMTSort::Bool,
+            SMTSort::Int,
             smt_vars,
         );
-        self.funs.push(fun.clone());
         self.fun_constraints.insert(
             fun.name.clone(),
             Constraint::ImPDefinition(name.clone(), value),
         );
+        self.intermediate_definitions.insert(poly, fun.clone());
         let fun_def = define_fun(fun, expr);
         self.out(fun_def);
     }
