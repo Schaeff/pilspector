@@ -814,6 +814,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn arith_linear_simple() {
         let mut query = setup_arith();
         query.push(assert(eq(
