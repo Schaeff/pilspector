@@ -11,6 +11,7 @@ pub enum SExpr {
 }
 
 impl SExpr {
+    /*
     pub fn as_symbol(&self) -> &String {
         if let SExpr::Symbol(s) = self {
             s
@@ -18,6 +19,8 @@ impl SExpr {
             panic!("Expected symbol.");
         }
     }
+    */
+
     pub fn as_subexpr(&self) -> &Vec<SExpr> {
         if let SExpr::Expr(items) = self {
             items
@@ -31,7 +34,7 @@ impl FromStr for SExpr {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (expr, mut rest) = parse_sexpr(s.chars().peekable());
-        if rest.peek() != None {
+        if rest.peek().is_some() {
             Err(format!("Leftover data: {}", rest.collect::<String>()))
         } else {
             Ok(expr)
@@ -80,7 +83,7 @@ fn parse_sexpr(mut input: Peekable<Chars>) -> (SExpr, Peekable<Chars>) {
     } else {
         let mut symbol = String::new();
         loop {
-            if input.peek() == None {
+            if input.peek().is_none() {
                 break;
             }
             let c = *input.peek().unwrap();
