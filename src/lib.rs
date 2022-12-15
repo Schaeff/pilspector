@@ -5,6 +5,7 @@ pub mod ast;
 mod displayer;
 mod folder;
 pub mod lookup_constants;
+mod sexpr;
 mod smt;
 pub mod smt_encoder;
 pub mod solver;

@@ -33,6 +33,8 @@ jobs:
         key: ${{ runner.os }}-pilcom-node-modules
     - name: Install pilcom
       run: cd pilcom && npm install
+    - name: Install z3
+      run: sudo apt-get install -y z3
     - name: Build
       run: cargo build --verbose
     - name: Run tests

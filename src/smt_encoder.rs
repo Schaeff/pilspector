@@ -41,12 +41,14 @@ impl SmtPil {
 enum Constraint {
     Identity(PolIdentity),
     Lookup(PlookupIdentity),
+    ImPDefinition(String, ExpressionId),
 }
 
 pub struct SmtEncoder {
     pub smt: Vec<SMTStatement>,
     funs: Vec<SMTFunction>,
     fun_constraints: BTreeMap<String, Constraint>,
+    intermediate_definitions: BTreeMap<Polynomial, SMTFunction>,
     lookup_constants: LookupConstants,
     in_vars: BTreeSet<String>,
     out_vars: BTreeSet<String>,
@@ -65,6 +67,7 @@ impl SmtEncoder {
             smt: Vec::default(),
             funs: Vec::default(),
             fun_constraints: BTreeMap::default(),
+            intermediate_definitions: BTreeMap::default(),
             lookup_constants,
             in_vars,
             out_vars,
@@ -74,6 +77,54 @@ impl SmtEncoder {
         encoder.visit_pil(pil).unwrap();
         encoder.encode_state_machine_determinism(pil);
         encoder.smt
+    }
+
+    /// Encodes @a rows consecutive rows of the state machine
+    /// @returns the SMT encoding plus a vector of all committed polynomials.
+    pub fn encode_unrolled(
+        pil: &Pil,
+        lookup_constants: LookupConstants,
+        rows: usize,
+    ) -> (Vec<SMTStatement>, Vec<Polynomial>) {
+        let mut encoder = SmtEncoder {
+            smt: Vec::default(),
+            funs: Vec::default(),
+            fun_constraints: BTreeMap::default(),
+            intermediate_definitions: BTreeMap::default(),
+            lookup_constants,
+            in_vars: BTreeSet::default(),
+            out_vars: BTreeSet::default(),
+            rows,
+        };
+        encoder.define_constants();
+        encoder.visit_pil(pil).unwrap();
+        // Encode the machine for a single step / row
+        let (state_machine_decl, all_vars) = encoder.encode_state_machine_step(pil);
+        let mut encoding = encoder.smt;
+
+        // Unroll it for "rows" rows and two executions.
+        encoding.extend(SmtEncoder::encode_state_machine_unrolled(
+            state_machine_decl,
+            &BTreeSet::default(),
+            all_vars,
+            rows,
+            1,
+        ));
+
+        let mut collector = VariableCollector::new();
+        collector.visit_pil(pil).unwrap();
+
+        (
+            encoding,
+            collector
+                .vars
+                .iter()
+                .map(|p| p.polynomial().clone())
+                .collect::<BTreeSet<_>>()
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+        )
     }
 }
 
@@ -166,6 +217,10 @@ fn pol_to_smt_var(pol: &ShiftedPolynomial, suffix: Option<String>) -> SMTVariabl
     SMTVariable::new(key, SMTSort::Int)
 }
 
+fn pol_to_smt_var_in_row_and_exec(pol: &ShiftedPolynomial, row: usize, exec: usize) -> SMTVariable {
+    pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec)))
+}
+
 fn constr_to_smt_function(i: &PolIdentity, constr_idx: usize, ctx: &Pil) -> SMTFunction {
     let mut collector = VariableCollector::new();
     let constr = &ctx.expressions[i.e.0];
@@ -196,6 +251,7 @@ impl SmtEncoder {
         // Constants that appear only in the RHS of a lookup
         // do not need to be a parameter in the state machine.
         let mut const_collector = VariableCollector::new();
+
         self.fun_constraints.values().for_each(|constr| {
             match constr {
                 Constraint::Identity(i) => {
@@ -212,6 +268,9 @@ impl SmtEncoder {
                     for e in f {
                         const_collector.visit_expression_id(e, p).unwrap();
                     }
+                }
+                Constraint::ImPDefinition(_name, value) => {
+                    const_collector.visit_expression_id(value, p).unwrap();
                 }
                 _ => panic!(),
             }
@@ -243,42 +302,48 @@ impl SmtEncoder {
                 .collect::<Vec<_>>(),
         );
 
+        let imp_names = self
+            .intermediate_definitions
+            .iter()
+            .map(|(poly, _)| pol_to_smt_var(&poly.clone().into(), None))
+            .collect::<Vec<_>>();
+        // Remove intermediate polynomials from the state machine parameters.
+        smt_vars.retain(|var| !imp_names.contains(var));
+
         // Declare the state machine's function.
         let state_machine_decl =
             SMTFunction::new("state_machine".to_string(), SMTSort::Bool, smt_vars);
         // Add the UF application of every constraint to the body of the state machine.
         // This includes constraints, lookups and constants.
-        let body = and_vec(
-            [
-                self.funs
-                    .iter()
-                    .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
-                    .collect::<Vec<_>>(),
-                const_collector
-                    .consts
-                    .iter()
-                    .filter_map(|c| {
-                        let (pol, next) = c.clone().decompose();
-                        self.lookup_constants
-                            .known_lookup_constant_as_predicate(&pol.into())
-                            .map(|f| {
-                                uf(
-                                    f,
-                                    vec![
-                                        if next {
-                                            add(SMTExpr::from(smt_row_arg.clone()), 1)
-                                        } else {
-                                            smt_row_arg.clone().into()
-                                        },
-                                        pol_to_smt_var(c, None).into(),
-                                    ],
-                                )
-                            })
-                    })
-                    .collect::<Vec<_>>(),
-            ]
-            .concat(),
-        );
+        let constraints = [
+            self.funs
+                .iter()
+                .map(|f| uf(f.clone(), f.args.iter().map(|v| v.clone().into()).collect()))
+                .collect::<Vec<_>>(),
+            const_collector
+                .consts
+                .iter()
+                .filter_map(|c| {
+                    let (pol, next) = c.clone().decompose();
+                    self.lookup_constants
+                        .known_lookup_constant_as_predicate(&pol.into())
+                        .map(|f| {
+                            uf(
+                                f,
+                                vec![
+                                    if next {
+                                        add(SMTExpr::from(smt_row_arg.clone()), 1)
+                                    } else {
+                                        smt_row_arg.clone().into()
+                                    },
+                                    pol_to_smt_var(c, None).into(),
+                                ],
+                            )
+                        })
+                })
+                .collect::<Vec<_>>(),
+        ]
+        .concat();
 
         // Warn about constants that are not constrained by a lookup.
         const_collector
@@ -291,17 +356,48 @@ impl SmtEncoder {
             })
             .for_each(|c| println!("Constant {} used in constraints has no lookup function.", c));
 
+        // Existentially quantify all intermediate polynomials and require their values
+        // to match their definition (we cannot really use "let" because their might be
+        // circular dependencies).
+        let body = exists(
+            imp_names,
+            and_vec(
+                [
+                    self.intermediate_definitions
+                        .iter()
+                        .map(|(poly, f)| {
+                            eq(
+                                pol_to_smt_var(&poly.clone().into(), None),
+                                match f.args.len() {
+                                    0 => SMTVariable {
+                                        name: f.name.clone(),
+                                        sort: f.sort.clone(),
+                                    }
+                                    .into(),
+                                    _ => uf(
+                                        f.clone(),
+                                        f.args.iter().map(|v| v.clone().into()).collect(),
+                                    ),
+                                },
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                    constraints,
+                ]
+                .concat(),
+            ),
+        );
+
         self.out(define_fun(state_machine_decl.clone(), body));
 
-        (
-            state_machine_decl,
-            const_collector
-                .consts
-                .iter()
-                .chain(collector.vars.iter())
-                .cloned()
-                .collect::<Vec<_>>(),
-        )
+        let parameter_polys = const_collector
+            .consts
+            .iter()
+            .chain(collector.vars.iter())
+            .cloned()
+            .filter(|p| !self.intermediate_definitions.contains_key(p.polynomial()))
+            .collect::<Vec<_>>();
+        (state_machine_decl, parameter_polys)
     }
 
     fn encode_state_machine_unrolled(
@@ -343,16 +439,14 @@ impl SmtEncoder {
 
                 all_vars.iter().for_each(|pol| {
                     // Create and declare the variable for this row and execution.
-                    let smt_var = pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec)));
+                    let smt_var = pol_to_smt_var_in_row_and_exec(pol, row, exec);
                     inner_decls.push(smt_var.clone());
 
                     // Bind `var` and `next_var` in two sequential rows in the same execution.
                     if row > 0 {
                         if let Some(ref pol_next) = pol.next() {
-                            let prev_smt_var = pol_to_smt_var(
-                                pol_next,
-                                Some(format!("_row{}_exec{}", row - 1, exec)),
-                            );
+                            let prev_smt_var =
+                                pol_to_smt_var_in_row_and_exec(pol_next, row - 1, exec);
                             decls.insert(prev_smt_var.clone());
                             next_constrs.push(eq(smt_var.clone(), prev_smt_var));
                         }
@@ -360,8 +454,7 @@ impl SmtEncoder {
 
                     // Bind two input variables of same row and different execution.
                     if exec > 0 && in_vars.get(&pol_to_smt_var(pol, None).name).is_some() {
-                        let other_exec_smt_var =
-                            pol_to_smt_var(pol, Some(format!("_row{}_exec{}", row, exec - 1)));
+                        let other_exec_smt_var = pol_to_smt_var_in_row_and_exec(pol, row, exec - 1);
                         assert!(decls.get(&other_exec_smt_var).is_some());
                         next_constrs.push(eq(smt_var, other_exec_smt_var));
                     }
@@ -410,8 +503,8 @@ impl SmtEncoder {
                     .filter(|pol| self.out_vars.get(&pol_to_smt_var(pol, None).name).is_some())
                     .map(|pol| {
                         eq(
-                            pol_to_smt_var(pol, Some(format!("_row{}_exec0", self.rows - 1))),
-                            pol_to_smt_var(pol, Some(format!("_row{}_exec1", self.rows - 1))),
+                            pol_to_smt_var_in_row_and_exec(pol, self.rows - 1, 0),
+                            pol_to_smt_var_in_row_and_exec(pol, self.rows - 1, 1),
                         )
                     })
                     .collect::<Vec<_>>(),
@@ -442,6 +535,13 @@ impl Visitor for SmtEncoder {
 
         for (index, identity) in p.pol_identities.iter().enumerate() {
             self.visit_polynomial_identity(identity, ctx, index)?;
+        }
+
+        for (key, r) in &p.references {
+            if let Polynomials::ImP(r) = r {
+                assert_eq!(r.len, None);
+                self.encode_intermediate_polynomial(key, r.id, ctx);
+            }
         }
 
         Ok(())
@@ -604,11 +704,38 @@ impl SmtEncoder {
         let pol = c.to_polynomial(ctx);
         pol_to_smt_var(&pol, None).into()
     }
+
+    fn encode_intermediate_polynomial(&mut self, name: &String, value: ExpressionId, ctx: &Pil) {
+        let poly = Polynomial::basic(name);
+        let value_expr = &ctx.expressions[value.0];
+        let expr = self.encode_expression(value_expr, ctx);
+        let mut collector = VariableCollector::new();
+        collector.visit_expression(value_expr, ctx).unwrap();
+
+        let smt_vars: Vec<_> = collector
+            .consts
+            .iter()
+            .chain(collector.vars.iter())
+            .map(|pol| pol_to_smt_var(pol, None))
+            .collect();
+        let fun = SMTFunction::new(
+            format!("imp_def_{}", escape_identifier(name)),
+            SMTSort::Int,
+            smt_vars,
+        );
+        self.fun_constraints.insert(
+            fun.name.clone(),
+            Constraint::ImPDefinition(name.clone(), value),
+        );
+        self.intermediate_definitions.insert(poly, fun.clone());
+        let fun_def = define_fun(fun, expr);
+        self.out(fun_def);
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::pilcom;
+    use crate::{pilcom, solver};
 
     use super::*;
 
@@ -628,19 +755,89 @@ mod test {
         println!("{}", smt_pil);
     }
 
-    #[test]
-    fn encode_arith() {
+    fn setup_arith() -> Vec<SMTStatement> {
         let pil_str = pilcom("pil/zkevm/arith.pil").unwrap();
         let pil: Pil = serde_json::from_str(&pil_str).unwrap();
 
-        let smt_pil = SmtPil::new(
-            pil,
-            LookupConstants::new(),
-            BTreeSet::default(),
-            BTreeSet::default(),
-            3,
-        );
+        // TODO: Maybe we have to run it for 33 iterations,
+        // so that the "next carry" is enforced to be zero again.
+        let (query, _vars) = SmtEncoder::encode_unrolled(&pil, LookupConstants::new(), 32);
+        query
+    }
 
-        println!("{}", smt_pil);
+    fn pol_ar_r_e(name: &str, index: usize, row: usize) -> SMTVariable {
+        pol_to_smt_var_in_row_and_exec(&Polynomial::array_element(name, index).into(), row, 0)
+    }
+
+    fn run_query(query: Vec<SMTStatement>) -> (bool, BTreeMap<String, String>) {
+        solver::query_smt_with_solver_return_model(
+            &query
+                .iter()
+                .map(|s| s.as_smt())
+                .collect::<Vec<_>>()
+                .join("\n"),
+            solver::SolverConfig::new("z3"),
+        )
+    }
+
+    fn assert_unsat(query: Vec<SMTStatement>) {
+        let (sat, model) = run_query(query);
+        if sat {
+            println!("Expected 'unsat' but got 'sat'. Model (omitting zero valued variables):");
+            for (var, value) in model {
+                if value != "0" {
+                    println!("{var} = {value}");
+                }
+            }
+            assert!(!sat);
+        }
+    }
+
+    fn assert_sat(query: Vec<SMTStatement>) {
+        let (sat, model) = run_query(query);
+        assert!(sat);
+    }
+
+    /// Verify that Arith.x1[0] is constant over a window of size 32
+    #[test]
+    fn arith_x1_constant() {
+        let mut query = setup_arith();
+        query.push(assert(not(eq(
+            pol_ar_r_e("Arith.x1", 0, 0),
+            pol_ar_r_e("Arith.x1", 0, 31),
+        ))));
+        query.push(assert(eq(
+            SMTVariable::new("row0".to_string(), SMTSort::Int),
+            0,
+        )));
+        assert_unsat(query);
+    }
+
+    #[test]
+    #[ignore]
+    fn arith_linear_simple() {
+        let mut query = setup_arith();
+        query.push(assert(eq(
+            SMTVariable::new("row0".to_string(), SMTSort::Int),
+            0,
+        )));
+        query.push(assert(eq(pol_ar_r_e("Arith.y1", 0, 0), 1)));
+        for i in 0..16 {
+            if i > 0 {
+                query.push(assert(eq(pol_ar_r_e("Arith.y1", i, 0), 0)));
+            }
+            query.push(assert(eq(pol_ar_r_e("Arith.y2", i, 0), 0)));
+            query.push(assert(eq(pol_ar_r_e("Arith.x2", i, 0), 0)));
+        }
+        query.push(assert(eq(pol_ar_r_e("Arith.selEq", 0, 0), 1)));
+        query.push(assert(eq(pol_ar_r_e("Arith.selEq", 1, 0), 0)));
+        query.push(assert(eq(pol_ar_r_e("Arith.selEq", 2, 0), 0)));
+        query.push(assert(eq(pol_ar_r_e("Arith.selEq", 3, 0), 0)));
+
+        // lower order bits are all "10".
+        query.push(assert(eq(pol_ar_r_e("Arith.y3", 0, 0), 10)));
+        query.push(assert(not(eq(pol_ar_r_e("Arith.x1", 0, 0), 10))));
+
+        assert_unsat(query);
     }
 }
