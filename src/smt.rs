@@ -48,9 +48,13 @@ impl From<u64> for SMTExpr {
 }
 
 pub fn signed_to_smt(input: i64) -> SMTExpr {
-    SMTExpr {
-        op: SMTOp::Literal(format!("{}", input), SMTSort::Int),
-        args: vec![],
+    if input < 0 {
+        usub(literal((-input).to_string(), SMTSort::Int))
+    } else {
+        SMTExpr {
+            op: SMTOp::Literal(format!("{}", input), SMTSort::Int),
+            args: vec![],
+        }
     }
 }
 
@@ -82,6 +86,7 @@ pub enum SMTOp {
     Implies,
     Add,
     Sub,
+    USub,
     Mul,
     Div,
     Mod,
@@ -203,6 +208,13 @@ pub fn sub<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Sub,
         args: vec![lhs.into(), rhs.into()],
+    }
+}
+
+pub fn usub<L: Into<SMTExpr>>(lhs: L) -> SMTExpr {
+    SMTExpr {
+        op: SMTOp::USub,
+        args: vec![lhs.into()],
     }
 }
 
@@ -377,6 +389,10 @@ impl SMTFormat for SMTExpr {
             SMTOp::Sub => {
                 assert!(self.args.len() == 2);
                 format!("(- {} {})", self.args[0].as_smt(), self.args[1].as_smt())
+            }
+            SMTOp::USub => {
+                assert!(self.args.len() == 1);
+                format!("(- {})", self.args[0].as_smt())
             }
             SMTOp::Mul => {
                 assert!(self.args.len() == 2);

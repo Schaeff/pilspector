@@ -597,7 +597,10 @@ impl SmtEncoder {
     }
 
     fn encode_number(&self, n: &Number) -> SMTExpr {
-        literal(n.value.clone(), SMTSort::Int)
+        match n.value.clone().parse::<i64>() {
+            Ok(i) if i < 0 => usub(literal((-i).to_string(), SMTSort::Int)),
+            _ => literal(n.value.clone(), SMTSort::Int),
+        }
     }
 
     fn encode_const(&self, c: &Const, ctx: &Pil) -> SMTExpr {
