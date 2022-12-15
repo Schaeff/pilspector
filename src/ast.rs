@@ -238,14 +238,14 @@ impl Polynomial {
 }
 
 impl Polynomial {
-    pub fn basic(key: &Name) -> Self {
+    pub fn basic<S: Into<Name>>(key: S) -> Self {
         Self {
-            key: key.clone(),
+            key: key.into(),
             index: None,
         }
     }
 
-    pub fn array_element(key: &str, index: usize) -> Self {
+    pub fn array_element<S: Into<Name>>(key: S, index: usize) -> Self {
         Self {
             key: key.into(),
             index: Some(index),
