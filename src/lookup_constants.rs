@@ -285,6 +285,10 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         range_constant(-(1 << 18), 1 << 18, 1),
     );
 
+    add_constant(&mut result, "Mem.ISNOTLAST", eq(v.clone(), 1));
+
+    add_constant(&mut result, "Mem.INCS", eq(v.clone(), add(r.clone(), 1)));
+
     add_constant(
         &mut result,
         "Binary.P_LAST",
