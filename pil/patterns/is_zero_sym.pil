@@ -1,0 +1,5 @@
+// output xIsZero
+namespace Pattern(%N);
+    pol commit x, xInv;
+    pol xIsZero = 1 - x*xInv; 
+    x*xIsZero = 0; // when x is 0, then xInv is unconstrained
