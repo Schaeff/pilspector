@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@0xpolygonhermez/zkevm-proverjs": "github:0xPolygonHermez/zkevm-proverjs#4092a3c6ade9e069f4e8f768f075c62a54d25e15",
+    "@0xpolygonhermez/zkevm-proverjs": "github:0xPolygonHermez/zkevm-proverjs#ee7f78623403f516ce773b9284126e124239fb21",
     "ffjavascript": "^0.2.55",
     "pilcom": "^0.0.17"
   }

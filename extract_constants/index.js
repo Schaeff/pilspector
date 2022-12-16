@@ -8,14 +8,12 @@ const { newConstantPolsArray, compile, newCommitPolsArray } = require("pilcom");
 
 const smArith = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_arith/sm_arith.js");
 const smBinary = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_binary.js");
-const smByte4 = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_byte4.js");
 const smGlobal = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_global.js");
 const smKeccakF = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_keccakf/sm_keccakf.js");
 const smMain = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_main/sm_main.js");
 const smMemAlign = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_mem_align.js");
 const smMem = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_mem.js");
 const smNine2One = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_nine2one.js");
-const smNormGate9 = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_norm_gate9.js");
 const smPaddingKK = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_padding_kk.js");
 const smPaddingKKBit = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_padding_kkbit/sm_padding_kkbit.js");
 const smPaddingPG = require("@0xpolygonhermez/zkevm-proverjs/src/sm/sm_padding_pg.js");
@@ -44,9 +42,9 @@ async function run() {
     //     }
     //     pilFile = argv.pil.trim();
     // }
-    console.log('compile PIL '+pilFile);
+    console.log('compile PIL ' + pilFile);
 
-    const pilConfig = { defines: {N: 2 ** 21} };
+    const pilConfig = { defines: { N: 2 ** 21 } };
 
     // if (argv.verbose) {
     //     pilConfig.verbose = true;
@@ -76,10 +74,6 @@ async function run() {
         console.log("Binary...");
         await smBinary.buildConstants(constPols.Binary);
     }
-    if (constPols.Byte4) {
-        console.log("Byte4...");
-        await smByte4.buildConstants(constPols.Byte4);
-    }
     if (constPols.Global) {
         console.log("Global...");
         await smGlobal.buildConstants(constPols.Global);
@@ -103,10 +97,6 @@ async function run() {
     if (constPols.Nine2One) {
         console.log("Nine2One...");
         await smNine2One.buildConstants(constPols.Nine2One);
-    }
-    if (constPols.NormGate9) {
-        console.log("NormGate9...");
-        await smNormGate9.buildConstants(constPols.NormGate9);
     }
     if (constPols.PaddingKK) {
         console.log("PaddingKK...");
@@ -158,28 +148,28 @@ async function run() {
             console.log("write ", fileName);
 
             fileName = fileName.replace(".", "_");
-    
-            const fd =await fs.promises.open(baseDir + "/" + fileName + ".json", "w+");
+
+            const fd = await fs.promises.open(baseDir + "/" + fileName + ".json", "w+");
 
             // put all values into [0, p[
             // disabled because we reason over integers for now
             // for(let i = 0; i < constPols.$$n; i++) {
             //     constPols.$$array[column][i] = (constPols.$$array[column][i] < 0n) ? (constPols.$$array[column][i] + 0xffffffff00000001n) : constPols.$$array[column][i];
             // }
-        
+
             await fd.write(JSON.stringify(constPols.$$array[column], (key, value) =>
-            typeof value === 'bigint'
-                ? value.toString()
-                : value));
-        
+                typeof value === 'bigint'
+                    ? value.toString()
+                    : value));
+
             await fd.close();
         }
     }
-    
+
     console.log("Constants generated succefully!");
 }
 
-run().then(()=> {
+run().then(() => {
     process.exit(0);
 }, (err) => {
     console.log(err.message);
