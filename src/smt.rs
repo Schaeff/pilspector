@@ -109,21 +109,17 @@ pub fn eq<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
-/*
 pub fn neq<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     not(eq(lhs, rhs))
 }
-*/
 
 pub fn eq_zero<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     eq(expr, 0)
 }
 
-/*
 pub fn neq_zero<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     neq(expr, 0)
 }
-*/
 
 pub fn not<L: Into<SMTExpr>>(expr: L) -> SMTExpr {
     SMTExpr {
@@ -181,19 +177,21 @@ pub fn ite<C: Into<SMTExpr>, T: Into<SMTExpr>, F: Into<SMTExpr>>(
         args: vec![cond.into(), true_term.into(), false_term.into()],
     }
 }
-/*
+
 pub fn implies(premise: impl Into<SMTExpr>, conclusion: impl Into<SMTExpr>) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Implies,
         args: vec![premise.into(), conclusion.into()],
     }
 }
-*/
 
 pub fn exists(vars: Vec<SMTVariable>, inner: SMTExpr) -> SMTExpr {
-    SMTExpr {
-        op: SMTOp::Exists(vars),
-        args: vec![inner],
+    match vars.len() {
+        0 => inner,
+        _ => SMTExpr {
+            op: SMTOp::Exists(vars),
+            args: vec![inner],
+        },
     }
 }
 
