@@ -251,6 +251,7 @@ impl SmtEncoder {
         // Constants that appear only in the RHS of a lookup
         // do not need to be a parameter in the state machine.
         let mut const_collector = VariableCollector::new();
+        let mut collector = VariableCollector::new();
 
         self.fun_constraints.values().for_each(|constr| {
             match constr {
@@ -260,10 +261,13 @@ impl SmtEncoder {
                 }
                 Constraint::Lookup(PlookupIdentity {
                     f,
-                    sel_f: None,
+                    sel_f,
                     sel_t: None,
                     ..
                 }) => {
+                    if let Some(selector) = sel_f {
+                        const_collector.visit_expression_id(selector, p).unwrap();
+                    }
                     // The "index" parameter is unused.
                     for e in f {
                         const_collector.visit_expression_id(e, p).unwrap();
@@ -271,6 +275,7 @@ impl SmtEncoder {
                 }
                 Constraint::ImPDefinition(_name, value) => {
                     const_collector.visit_expression_id(value, p).unwrap();
+                    collector.visit_expression_id(value, p).unwrap();
                 }
                 _ => panic!(),
             }
@@ -290,7 +295,6 @@ impl SmtEncoder {
         );
 
         // Collect `pol commit` variables.
-        let mut collector = VariableCollector::new();
         collector.visit_pil(p).unwrap();
 
         // Make SMT vars for `pol commit` variables.
@@ -592,14 +596,30 @@ impl Visitor for SmtEncoder {
         ctx: &Pil,
         idx: usize,
     ) -> Result<Self::Error> {
-        if let Some(ref _id) = i.sel_f {
-            unimplemented!("Selectors for 'from' not implemented: {}", i.to_string(ctx));
-        }
+        let mut collector = VariableCollector::new();
+
+        let symb_f = if let Some(ref id) = i.sel_f {
+            collector.visit_expression_id(id, ctx).unwrap();
+
+            // sel_f must be either a const or a var
+            if !collector.consts.is_empty() {
+                Some(pol_to_smt_var(
+                    collector.consts.iter().next().unwrap(),
+                    None,
+                ))
+            } else if !collector.vars.is_empty() {
+                Some(pol_to_smt_var(collector.vars.iter().next().unwrap(), None))
+            } else {
+                panic!();
+            }
+        } else {
+            None
+        };
+
         if let Some(ref _id) = i.sel_t {
             unimplemented!("Selectors for 'to' not implemented: {}", i.to_string(ctx));
         }
 
-        let mut collector = VariableCollector::new();
         assert_eq!(i.f.len(), i.t.len());
         let lhs_exprs: Vec<SMTExpr> =
             i.f.iter()
@@ -634,11 +654,17 @@ impl Visitor for SmtEncoder {
         self.fun_constraints
             .insert(lookup_function.name.clone(), Constraint::Lookup(i.clone()));
 
-        let fun_def = define_fun(
-            lookup_function,
-            self.lookup_constants
-                .encode_lookup(lhs_exprs, rhs_constants),
-        );
+        let conj = self
+            .lookup_constants
+            .encode_lookup(lhs_exprs, rhs_constants);
+
+        let body = if let Some(f) = symb_f {
+            implies(neq_zero(f), conj)
+        } else {
+            conj
+        };
+
+        let fun_def = define_fun(lookup_function, body);
         self.out(fun_def);
 
         Ok(())
