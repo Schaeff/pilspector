@@ -308,8 +308,8 @@ impl SmtEncoder {
 
         let imp_names = self
             .intermediate_definitions
-            .iter()
-            .map(|(poly, _)| pol_to_smt_var(&poly.clone().into(), None))
+            .keys()
+            .map(|poly| pol_to_smt_var(&poly.clone().into(), None))
             .collect::<Vec<_>>();
         // Remove intermediate polynomials from the state machine parameters.
         smt_vars.retain(|var| !imp_names.contains(var));
