@@ -131,8 +131,8 @@ impl LookupConstants {
         [
             self.functions.clone(),
             self.constants
-                .iter()
-                .map(|(_name, def)| def.clone())
+                .values()
+                .cloned()
                 .chain(
                     self.shortcuts
                         .iter()
@@ -145,7 +145,7 @@ impl LookupConstants {
 }
 
 fn add_constant_function(result: &mut Vec<SMTStatement>, name: &str, body: SMTExpr) {
-    let poly = Polynomial::basic(&name.to_string());
+    let poly = Polynomial::basic(name.to_string());
     add_constant_function_poly(result, poly, body);
 }
 
@@ -166,7 +166,7 @@ fn add_constant_function_poly(result: &mut Vec<SMTStatement>, poly: Polynomial, 
 }
 
 fn add_constant(result: &mut BTreeMap<Polynomial, SMTStatement>, name: &str, body: SMTExpr) {
-    let poly = Polynomial::basic(&name.to_string());
+    let poly = Polynomial::basic(name.to_string());
     add_constant_poly(result, poly, body);
 }
 
@@ -219,8 +219,7 @@ fn known_functions() -> Vec<SMTStatement> {
         constant_lookup_function_appl("Binary.P_CIN".to_string(), vec![r.clone().into()]);
     let p_opcode_appl =
         constant_lookup_function_appl("Binary.P_OPCODE".to_string(), vec![r.clone().into()]);
-    let p_last_appl =
-        constant_lookup_function_appl("Binary.P_LAST".to_string(), vec![r.clone().into()]);
+    let p_last_appl = constant_lookup_function_appl("Binary.P_LAST".to_string(), vec![r.into()]);
 
     // Declare the variables that will be aliased to the applications
     let p_a = literal("a".to_string(), SMTSort::Int);
@@ -235,7 +234,7 @@ fn known_functions() -> Vec<SMTStatement> {
         SMTSort::Int,
         vec![a.clone(), b.clone()],
     );
-    add_aux_function(&mut result, add_fun_c.clone(), add(a.clone(), b.clone()));
+    add_aux_function(&mut result, add_fun_c, add(a.clone(), b.clone()));
 
     let sub_fun_c = SMTFunction::new(
         "AUX_SUB_C".to_string(),
@@ -281,7 +280,7 @@ fn known_functions() -> Vec<SMTStatement> {
     let eq_fun_c = SMTFunction::new(
         "AUX_EQ_C".to_string(),
         SMTSort::Int,
-        vec![a.clone(), b.clone(), c.clone(), d.clone()],
+        vec![a.clone(), b.clone(), c, d],
     );
     add_aux_function_decl(&mut result, eq_fun_c.clone());
 
@@ -299,34 +298,24 @@ fn known_functions() -> Vec<SMTStatement> {
     );
     add_aux_function_decl(&mut result, or_fun_c.clone());
 
-    let xor_fun_c = SMTFunction::new(
-        "AUX_XOR_C".to_string(),
-        SMTSort::Int,
-        vec![a.clone(), b.clone()],
-    );
+    let xor_fun_c = SMTFunction::new("AUX_XOR_C".to_string(), SMTSort::Int, vec![a, b]);
     add_aux_function_decl(&mut result, xor_fun_c.clone());
 
     // Build the opcodes
     let op_0 = modulo(add(p_cin.clone(), add(p_a.clone(), p_b.clone())), 256);
-    let op_1 = uf(
-        sub_fun_c.clone(),
-        vec![p_a.clone(), p_b.clone(), p_cin.clone()],
-    );
+    let op_1 = uf(sub_fun_c, vec![p_a.clone(), p_b.clone(), p_cin.clone()]);
     let op_2 = uf(
-        lt_fun_c.clone(),
+        lt_fun_c,
         vec![p_a.clone(), p_b.clone(), p_cin.clone(), p_last.clone()],
     );
     let op_3 = uf(
-        slt_fun_c.clone(),
+        slt_fun_c,
         vec![p_a.clone(), p_b.clone(), p_cin.clone(), p_last.clone()],
     );
-    let op_4 = uf(
-        eq_fun_c.clone(),
-        vec![p_a.clone(), p_b.clone(), p_cin.clone(), p_last.clone()],
-    );
-    let op_5 = uf(and_fun_c.clone(), vec![p_a.clone(), p_b.clone()]);
-    let op_6 = uf(or_fun_c.clone(), vec![p_a.clone(), p_b.clone()]);
-    let op_7 = uf(xor_fun_c.clone(), vec![p_a.clone(), p_b.clone()]);
+    let op_4 = uf(eq_fun_c, vec![p_a.clone(), p_b.clone(), p_cin, p_last]);
+    let op_5 = uf(and_fun_c, vec![p_a.clone(), p_b.clone()]);
+    let op_6 = uf(or_fun_c, vec![p_a.clone(), p_b.clone()]);
+    let op_7 = uf(xor_fun_c, vec![p_a, p_b]);
 
     let p_c = ite(
         eq(p_op.clone(), 0),
@@ -346,7 +335,7 @@ fn known_functions() -> Vec<SMTStatement> {
                         ite(
                             eq(p_op.clone(), 5),
                             op_5,
-                            ite(eq(p_op.clone(), 6), op_6, ite(eq(p_op.clone(), 7), op_7, 0)),
+                            ite(eq(p_op.clone(), 6), op_6, ite(eq(p_op, 7), op_7, 0)),
                         ),
                     ),
                 ),
@@ -536,7 +525,7 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<Polynomial>, (SMTFunction, SMTExpr)>
     let b = SMTVariable::new("b".to_string(), SMTSort::Int);
     let c = SMTVariable::new("c".to_string(), SMTSort::Int);
     result.insert(
-        vec![Polynomial::basic(&"Global.BYTE2".to_string())],
+        vec![Polynomial::basic("Global.BYTE2".to_string())],
         (
             SMTFunction::new(
                 "Global_BYTE2_isolated".to_string(),
@@ -547,7 +536,7 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<Polynomial>, (SMTFunction, SMTExpr)>
         ),
     );
     result.insert(
-        vec![Polynomial::basic(&"Global.BYTE".to_string())],
+        vec![Polynomial::basic("Global.BYTE".to_string())],
         (
             SMTFunction::new(
                 "Global_BYTE_isolated".to_string(),
@@ -559,8 +548,8 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<Polynomial>, (SMTFunction, SMTExpr)>
     );
     result.insert(
         vec![
-            Polynomial::basic(&"Arith.SEL_BYTE2_BIT19".to_string()),
-            Polynomial::basic(&"Arith.BYTE2_BIT19".to_string()),
+            Polynomial::basic("Arith.SEL_BYTE2_BIT19".to_string()),
+            Polynomial::basic("Arith.BYTE2_BIT19".to_string()),
         ],
         (
             SMTFunction::new(
@@ -584,7 +573,7 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<Polynomial>, (SMTFunction, SMTExpr)>
         ),
     );
     result.insert(
-        vec![Polynomial::basic(&"Arith.GL_SIGNED_18BITS".to_string())],
+        vec![Polynomial::basic("Arith.GL_SIGNED_18BITS".to_string())],
         (
             SMTFunction::new(
                 "Arith_GL_SIGNED_18BITS_isolated".to_string(),
@@ -599,9 +588,9 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<Polynomial>, (SMTFunction, SMTExpr)>
     );
     result.insert(
         vec![
-            Polynomial::basic(&"Arith.GL_SIGNED_4BITS_C0".to_string()),
-            Polynomial::basic(&"Arith.GL_SIGNED_4BITS_C1".to_string()),
-            Polynomial::basic(&"Arith.GL_SIGNED_4BITS_C2".to_string()),
+            Polynomial::basic("Arith.GL_SIGNED_4BITS_C0".to_string()),
+            Polynomial::basic("Arith.GL_SIGNED_4BITS_C1".to_string()),
+            Polynomial::basic("Arith.GL_SIGNED_4BITS_C2".to_string()),
         ],
         (
             SMTFunction::new(
