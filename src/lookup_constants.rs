@@ -362,7 +362,7 @@ fn known_functions() -> Vec<SMTStatement> {
     );
 
     add_constant_function(&mut result, 
-        "MemAlign.WR8", ge(modulo(r.clone(), 4096), 3072)
+        "MemAlign.WR8", ite(ge(modulo(r.clone(), 4096), 3072), 1, 0)
     );
 
     add_constant_function(&mut result, 
@@ -609,14 +609,17 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         "MemAlign.WR256",
         let_smt(
             vec![("b".to_string(), modulo(r.clone(), 4096))],
-            ite(and_vec(vec![ge(r.clone(), 2048), lt(r.clone(), 3072)]), 1, 0)
+            eq(
+                v.clone(),
+                ite(and_vec(vec![ge(b.clone(), 2048), lt(b.clone(), 3072)]), 1, 0)
+            )
         )
     );
     add_constant(&mut result,
         "MemAlign.WR8",
         eq(
             v.clone(),
-            ite(constant_lookup_function_appl("MemAlign.WR8".to_string(), vec![r.clone().into()]), 1, 0)
+            constant_lookup_function_appl("MemAlign.WR8".to_string(), vec![r.clone().into()])
         )
     );
 
