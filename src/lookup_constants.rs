@@ -183,7 +183,10 @@ fn known_functions() -> BTreeMap<Polynomial, SMTStatement> {
 
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
 
-    add_constant_function(&mut result, "Binary.P_A", modulo(div(r, 256), 256));
+    add_constant_function(&mut result, "Binary.P_A", modulo(div(r.clone(), 256), 256));
+
+    // This is wrong, missing a mod 256 here. But was already reported in january.
+    add_constant_function(&mut result, "MemAlign.BYTE_C4096", modulo(div(r.clone(), 4096), 256));
 
     result
 }
@@ -208,16 +211,18 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     add_constant(
         &mut result,
         "Global.BYTE",
-        and_vec(vec![
-            eq(r.clone(), v.clone()), // strictly, r % 2**8 = v - this is important if this is used together with another constant in the same lookup
-            ge(v.clone(), 0),
-            le(v.clone(), u8::MAX as u64),
-        ]),
+        eq(v.clone(), modulo(r.clone(), 256)),
     );
+    add_constant(
+        &mut result,
+        "Global.BYTE_2A",
+        eq(v.clone(), modulo(div(r.clone(), 256), 256)),
+    );
+    add_constant(&mut result, "Global.STEP32", eq(v.clone(), modulo(r.clone(), 32)));
     for i in 0..32 {
         add_constant_poly(
             &mut result,
-            Polynomial::array_element("Arith.CLK", i),
+            Polynomial::array_element("Global.CLK32", i),
             eq(v.clone(), ite(eq(modulo(r.clone(), 32), i as u64), 1, 0)),
         );
     }
@@ -332,8 +337,32 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     add_constant(
         &mut result,
         "Binary.RESET",
-        eq(v, ite(eq(modulo(r, 8 * 4), 0), 1, 0)),
+        eq(v.clone(), ite(eq(modulo(r.clone(), 8 * 4), 0), 1, 0)),
     );
+
+    add_constant(&mut result, "MemAlign.OFFSET",
+        eq(v.clone(),
+            constant_lookup_function_appl(
+                "MemAlign.OFFSET".to_string(),
+                vec![r.clone().into()]
+            )
+        )
+    );
+    // TODO...
+    add_constant(&mut result, "MemAlign.WR256", literal_true());
+    add_constant(&mut result, "MemAlign.WR8", literal_true());
+    for i in 0..8 {
+        add_constant_poly(
+            &mut result,
+            Polynomial::array_element("MemAlign.FACTOR", i),
+            literal_true(),
+        );
+        add_constant_poly(
+            &mut result,
+            Polynomial::array_element("MemAlign.FACTORV", i),
+            literal_true(),
+        );
+    }
 
     result
 }
@@ -431,14 +460,31 @@ fn known_shortcut_lookups() -> BTreeMap<Vec<Polynomial>, (SMTFunction, SMTExpr)>
             // TODO is it just me or are x, y, z totally independent of each other?
             and_vec(vec![
                 ge(a.clone(), signed_to_smt(-16)),
-                le(a, 16),
+                le(a.clone(), 16),
                 ge(b.clone(), signed_to_smt(-16)),
-                le(b, 16),
+                le(b.clone(), 16),
                 ge(c.clone(), signed_to_smt(-16)),
                 le(c, 16),
             ]),
         ),
     );
 
+    result.insert(
+        vec![
+            Polynomial::basic(&"Global.BYTE_2A".to_string()),
+            Polynomial::basic(&"Global.BYTE".to_string()),
+        ], (
+        SMTFunction::new(
+            "MemAlign_BYTE_CONSTRAINT".to_string(),
+            SMTSort::Bool,
+            vec![a.clone(), b.clone()],
+        ),
+        and_vec(vec![
+            ge(a.clone(), 0),
+            le(a.clone(), 255),
+            ge(b.clone(), 0),
+            le(b.clone(), 255),
+        ]))
+    );
     result
 }
