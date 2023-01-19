@@ -356,10 +356,69 @@ fn known_functions() -> Vec<SMTStatement> {
 
     // END BINARY.PIL ////////////////////
 
-    // This is wrong, missing a mod 256 here. But was already reported in january.
+    // This is the fixed version of the bug reported in January.
     add_constant_function(&mut result, 
         "MemAlign.BYTE_C4096", modulo(div(r.clone(), 4096), 256)
     );
+
+    add_constant_function(&mut result, 
+        "MemAlign.WR8", ge(modulo(r.clone(), 4096), 3072)
+    );
+
+    add_constant_function(&mut result, 
+        "MemAlign.OFFSET", modulo(div(r.clone(), 32), 32)
+    );
+
+    let offset_appl = constant_lookup_function_appl("MemAlign.OFFSET".to_string(), vec![r.clone().into()]);
+    let wr8_appl = constant_lookup_function_appl("MemAlign.WR8".to_string(), vec![r.clone().into()]);
+    add_constant_function(&mut result,
+        "MemAlign.V_BYTE", modulo(add(31, sub(add(offset_appl.clone(), wr8_appl.clone()), modulo(r.clone(), 32))), 32)
+    );
+    
+    let wr8 = SMTVariable::new("wr8".to_string(), SMTSort::Int);
+    let offset = SMTVariable::new("offset".to_string(), SMTSort::Int);
+    let step = SMTVariable::new("step".to_string(), SMTSort::Int);
+    add_constant_function(&mut result,
+        "MemAlign.SELM1", let_smt(vec![
+            ("wr8".to_string(), wr8_appl),
+            ("offset".to_string(), offset_appl),
+            ("step".to_string(), modulo(r.clone(), 32))
+        ],
+            ite(
+                ite(
+                    eq(wr8, 1),
+                    eq(step.clone(), offset.clone()),
+                    gt(offset, step)
+                ),
+                1,
+                0
+            )
+    ));
+
+    add_constant_function(&mut result,
+        "MemAlign.P256", ite(eq(r.clone(), 0), 1,
+                            ite(eq(r.clone(), 1), 256,
+                                ite(eq(r.clone(), 2), 65536,
+                                    ite(eq(r.clone(), 3), 16777216, 0)
+                                )
+                            )
+                        )        
+    );
+    
+    let vbyte_appl = constant_lookup_function_appl("MemAlign.V_BYTE".to_string(), vec![r.clone().into()]);
+    let vbyte = SMTVariable::new("vbyte".to_string(), SMTSort::Int);
+    for idx in 0..8 {
+        add_constant_function_poly(&mut result,
+            Polynomial::array_element("MemAlign.FACTORV".to_string(), idx), let_smt(vec![
+                ("vbyte".to_string(), vbyte_appl.clone())
+            ],
+            ite(
+                                    eq(div(vbyte.clone(), 4), idx as u64),
+                                    constant_lookup_function_appl("MemAlign.P256".to_string(), vec![modulo(vbyte.clone(), 4)]),
+                                0)
+            )
+        );
+    }
 
     result
 }
@@ -368,6 +427,7 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     let mut result = BTreeMap::new();
     let r = SMTVariable::new("r".to_string(), SMTSort::Int);
     let v = SMTVariable::new("v".to_string(), SMTSort::Int);
+    let b = SMTVariable::new("b".to_string(), SMTSort::Int);
     assert_eq!(
         constant_lookup_predicate(String::new()).args,
         vec![r.clone(), v.clone()]
@@ -418,7 +478,7 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
     );
     // All the GL_SIGNED constants are built in the same way, with parameters
     // from, to, steps:
-    // starts at "start", stays at a value for "steps" steps, then is incrementd by 1
+    // starts at "start", stays at a value for "steps" steps, then is incremented by 1
     // if it reaches "end", is reset to "start" (only after the steps, i.e. "end" is
     // included in the range)
     // formally:
@@ -523,6 +583,48 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         eq(v.clone(), ite(eq(modulo(r.clone(), 8 * 4), 0), 1, 0)),
     );
 
+    for i in 0..8 {
+        add_constant_poly(
+            &mut result,
+            Polynomial::array_element("MemAlign.FACTOR", i),
+            eq(v.clone(),
+                ite(
+                    lt(
+                        modulo(
+                            sub((i*4) as u64, r.clone()),
+                            32
+                        ), 4
+                    ),
+                    constant_lookup_function_appl("MemAlign.P256".to_string(), vec![modulo(r.clone(), 4)]),
+                    0
+                )
+            )
+        );
+    };
+    add_constant(&mut result,
+        "MemAlign.WR256",
+        let_smt(
+            vec![("b".to_string(), modulo(r.clone(), 4096))],
+            ite(and_vec(vec![ge(r.clone(), 2048), lt(r.clone(), 3072)]), 1, 0)
+        )
+    );
+    add_constant(&mut result,
+        "MemAlign.WR8",
+        eq(
+            v.clone(),
+            ite(constant_lookup_function_appl("MemAlign.WR8".to_string(), vec![r.clone().into()]), 1, 0)
+        )
+    );
+
+    add_constant(
+        &mut result,
+        "MemAlign.BYTE_C4096",
+        eq(
+            v.clone(),
+            constant_lookup_function_appl("MemAlign.BYTE_C4096".to_string(), vec![r.clone().into()]),
+        ),
+    );
+
     add_constant(&mut result, "MemAlign.OFFSET",
         eq(v.clone(),
             constant_lookup_function_appl(
@@ -531,19 +633,22 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
             )
         )
     );
-    // TODO...
-    add_constant(&mut result, "MemAlign.WR256", literal_true());
-    add_constant(&mut result, "MemAlign.WR8", literal_true());
+
+    add_constant(&mut result, "MemAlign.SELM1",
+        eq(v.clone(),
+            constant_lookup_function_appl(
+                "MemAlign.SELM1".to_string(),
+                vec![r.clone().into()]
+            )
+        )
+    );
+
     for i in 0..8 {
+        let factorv_idx = Polynomial::array_element("MemAlign.FACTORV", i);
         add_constant_poly(
             &mut result,
-            Polynomial::array_element("MemAlign.FACTOR", i),
-            literal_true(),
-        );
-        add_constant_poly(
-            &mut result,
-            Polynomial::array_element("MemAlign.FACTORV", i),
-            literal_true(),
+            factorv_idx.clone(),
+            eq(v.clone(), constant_lookup_function_appl(factorv_idx.clone().to_string(), vec![r.clone().into()]))
         );
     }
 

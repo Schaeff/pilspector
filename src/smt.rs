@@ -259,14 +259,12 @@ pub fn le<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
-/*
 pub fn gt<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Gt,
         args: vec![lhs.into(), rhs.into()],
     }
 }
-*/
 
 pub fn ge<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
