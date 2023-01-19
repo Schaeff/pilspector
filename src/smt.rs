@@ -94,6 +94,7 @@ pub enum SMTOp {
     Le,
     Gt,
     Ge,
+    Let(Vec<(String, SMTExpr)>),
     Exists(Vec<SMTVariable>),
     Literal(String, SMTSort),
     Variable(SMTVariable),
@@ -185,6 +186,13 @@ pub fn implies(premise: impl Into<SMTExpr>, conclusion: impl Into<SMTExpr>) -> S
     }
 }
 
+pub fn let_smt(aliases: Vec<(String, SMTExpr)>, inner: SMTExpr) -> SMTExpr {
+    SMTExpr {
+        op: SMTOp::Let(aliases),
+        args: vec![inner],
+    }
+}
+
 pub fn exists(vars: Vec<SMTVariable>, inner: SMTExpr) -> SMTExpr {
     match vars.len() {
         0 => inner,
@@ -237,14 +245,12 @@ pub fn modulo<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     }
 }
 
-/*
 pub fn lt<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
         op: SMTOp::Lt,
         args: vec![lhs.into(), rhs.into()],
     }
 }
-*/
 
 pub fn le<L: Into<SMTExpr>, R: Into<SMTExpr>>(lhs: L, rhs: R) -> SMTExpr {
     SMTExpr {
@@ -309,11 +315,11 @@ pub fn declare_const(var: SMTVariable) -> SMTStatement {
     SMTStatement::DeclareConst(var)
 }
 
-/*
 pub fn declare_fun(var: SMTVariable, sorts: Vec<SMTSort>) -> SMTStatement {
     SMTStatement::DeclareFun(var, sorts)
 }
 
+/*
 pub fn define_const(var: SMTVariable, val: SMTExpr) -> SMTStatement {
     SMTStatement::DefineConst(var, val)
 }
@@ -419,6 +425,17 @@ impl SMTFormat for SMTExpr {
             SMTOp::Ge => {
                 assert!(self.args.len() == 2);
                 format!("(>= {} {})", self.args[0].as_smt(), self.args[1].as_smt())
+            }
+            SMTOp::Let(aliases) => {
+                format!(
+                    "(let ({}) {})",
+                    aliases
+                        .iter()
+                        .map(|(alias, expr)| format!("({} {})", alias, expr.as_smt()))
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                    self.args[0].as_smt()
+                )
             }
             SMTOp::Exists(vars) => {
                 assert!(self.args.len() == 1);
