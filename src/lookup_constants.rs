@@ -587,20 +587,24 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         add_constant_poly(
             &mut result,
             Polynomial::array_element("MemAlign.FACTOR", i),
-            eq(v.clone(),
-                ite(
-                    lt(
-                        modulo(
-                            sub((i*4) as u64, r.clone()),
-                            32
-                        ), 4
-                    ),
-                    constant_lookup_function_appl("MemAlign.P256".to_string(), vec![modulo(r.clone(), 4)]),
-                    0
+            let_smt(
+                vec![("b".to_string(), 
+                    modulo(
+                        sub((i*4) as u64, r.clone()),
+                        32
+                    ))
+                ],
+                eq(v.clone(),
+                    ite(
+                        lt(b, 4),
+                        constant_lookup_function_appl("MemAlign.P256".to_string(), vec![b]),
+                        0
+                    )
                 )
             )
         );
-    };
+    }
+
     add_constant(&mut result,
         "MemAlign.WR256",
         let_smt(
