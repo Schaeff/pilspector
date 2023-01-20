@@ -583,14 +583,14 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
         eq(v.clone(), ite(eq(modulo(r.clone(), 8 * 4), 0), 1, 0)),
     );
 
-    for i in 0..8 {
+    for i in 0u64..8 {
         add_constant_poly(
             &mut result,
-            Polynomial::array_element("MemAlign.FACTOR", i),
+            Polynomial::array_element("MemAlign.FACTOR", i as usize),
             let_smt(
                 vec![("b".to_string(), 
                     modulo(
-                        sub((i*4) as u64, r.clone()),
+                        sub(31 - (i*4), r.clone()),
                         32
                     ))
                 ],
