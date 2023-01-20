@@ -596,8 +596,8 @@ fn known_constants() -> BTreeMap<Polynomial, SMTStatement> {
                 ],
                 eq(v.clone(),
                     ite(
-                        lt(b, 4),
-                        constant_lookup_function_appl("MemAlign.P256".to_string(), vec![b]),
+                        lt(b.clone(), 4),
+                        constant_lookup_function_appl("MemAlign.P256".to_string(), vec![b.clone().into()]),
                         0
                     )
                 )
